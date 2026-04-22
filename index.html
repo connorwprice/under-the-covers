@@ -187,7 +187,7 @@
   <div class="or-row">or</div>
   <button class="demo-btn" onclick="startDemo()">Play with Built-in Song List</button>
   <p class="hint">Spotify Premium required for audio playback.<br>Connects directly to the Under the Covers playlist.</p>
-  <button class="admin-link-btn" onclick="showAdminLogin()">⚙ Admin</button>
+  <button class="admin-link-btn" id="admin-link-btn" onclick="showAdminLogin()">⚙ Admin</button>
   <div id="debug-box" class="debug-box"></div>
   <div id="err-banner" class="err-banner"></div>
 </div>
@@ -345,6 +345,9 @@
 <!-- ADMIN LOGIN -->
 <div id="screen-admin-login" class="screen" style="align-items:center;justify-content:center;padding:2rem;gap:1.5rem">
   <div style="font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--gold)">Admin Panel</div>
+  <div id="admin-spotify-warning" style="background:#2a2010;border:1.5px solid var(--gold);border-radius:10px;padding:.85rem 1rem;font-size:.82rem;color:var(--cream);line-height:1.5;text-align:center;width:100%;display:none">
+    ⚠️ Connect with Spotify first so the sync can access your playlist.
+  </div>
   <input type="password" id="admin-pw-input" placeholder="Enter password" style="width:100%;background:var(--groove);border:1.5px solid #444;border-radius:10px;padding:13px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:1rem;outline:none;text-align:center" onkeydown="if(event.key==='Enter')checkAdminPw()">
   <button class="continue-btn" onclick="checkAdminPw()">Enter</button>
   <button class="back-btn" style="font-size:.85rem;color:var(--muted)" onclick="showScreen('login')">&#8592; Back</button>
@@ -1604,13 +1607,21 @@ async function deleteSheetRow(rowIndex){
 }
 
 // ── ADMIN ──
-function showAdminLogin(){showScreen('admin-login')}
+function showAdminLogin(){
+  // If already logged into Spotify, go straight to admin login
+  // If not, remind them to connect first
+  showScreen('admin-login');
+}
 
 function checkAdminPw(){
   const pw=document.getElementById('admin-pw-input').value;
   if(pw===ADMIN_PASSWORD){
     document.getElementById('admin-pw-input').value='';
     document.getElementById('admin-pw-error').style.display='none';
+    if(!token){
+      document.getElementById('admin-spotify-warning').style.display='block';
+      return;
+    }
     showScreen('admin');
     loadAdminPanel();
   } else {
@@ -1621,12 +1632,33 @@ function checkAdminPw(){
 async function loadAdminPanel(){
   const status=$('admin-status');
   status.style.display='block';
+
+  if(!token){
+    status.textContent='';
+    status.style.animation='none';
+    status.style.color='#e74c3c';
+    status.innerHTML='<b>Warning:</b> Connect with Spotify first so sync can access your playlist.';
+    status.innerHTML+='<br><br>';
+    const goBtn=document.createElement('button');
+    goBtn.className='admin-action-btn';
+    goBtn.textContent='Go to Login';
+    goBtn.onclick=()=>showScreen('login');
+    status.appendChild(goBtn);
+    return;
+  }
+
+  status.style.color='';
+  status.style.animation='';
   status.textContent='Loading sheet data...';
   try{
     const sheetRows=await fetchSheet();
     status.textContent='Sheet loaded. Fetching Spotify playlist...';
-    const spotifyUris=await fetchSpotifyPlaylistUris();
-    renderAdminPanel(sheetRows,spotifyUris);
+    const spotifyTracks=await fetchSpotifyPlaylistUris();
+    if(spotifyTracks.length===0){
+      status.textContent='Could not fetch Spotify playlist. Make sure you are logged in.';
+      return;
+    }
+    renderAdminPanel(sheetRows,spotifyTracks);
     status.style.display='none';
   }catch(e){
     status.textContent='Error: '+e.message;
