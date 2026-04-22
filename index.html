@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Under the Covers</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--vinyl:#1a1a1a;--groove:#2d2d2d;--gold:#c8a84b;--gold-light:#e8c96b;--cream:#f5f0e8;--red:#c0392b;--green:#27ae60;--muted:#888}
+  html,body{height:100%;background:var(--vinyl);color:var(--cream);font-family:'DM Sans',sans-serif}
+  #app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+  .screen{display:none;flex-direction:column;flex:1;padding:0}
+  .screen.active{display:flex}
+  #screen-login{align-items:center;justify-content:center;padding:2rem;gap:1.5rem}
+  .logo-vinyl{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#555 0%,#222 28%,#111 29%,#1a1a1a 58%,#111 59%,#1a1a1a 78%,#111 79%,#0a0a0a 100%);margin:0 auto 1rem;position:relative;animation:spin 8s linear infinite;box-shadow:0 0 0 3px var(--gold),0 8px 32px rgba(0,0,0,.7)}
+  .logo-vinyl::after{content:'';width:20px;height:20px;background:var(--gold);border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .logo-title{font-family:'Playfair Display',serif;font-size:2.6rem;font-weight:900;color:var(--gold);text-align:center;line-height:1;letter-spacing:-1px}
+  .logo-sub{font-size:.75rem;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);text-align:center}
+  .spotify-btn{display:flex;align-items:center;justify-content:center;gap:12px;background:#1DB954;color:#fff;border:none;border-radius:50px;padding:15px 28px;font-family:'DM Sans',sans-serif;font-size:1rem;font-weight:500;cursor:pointer;width:100%;transition:background .15s,transform .1s}
+  .spotify-btn:hover{background:#1ed760;transform:scale(1.02)}
+  .or-row{display:flex;align-items:center;gap:10px;width:100%;color:var(--muted);font-size:.8rem}
+  .or-row::before,.or-row::after{content:'';flex:1;height:1px;background:#333}
+  .demo-btn{background:none;border:1.5px solid var(--gold);color:var(--gold);border-radius:50px;padding:13px 28px;font-family:'DM Sans',sans-serif;font-size:.95rem;cursor:pointer;width:100%;transition:background .15s,color .15s}
+  .demo-btn:hover{background:var(--gold);color:var(--vinyl)}
+  .hint{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.6}
+  .debug-box{background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:.75rem;font-size:.72rem;color:#aaa;word-break:break-all;line-height:1.6;width:100%}
+  .err-banner{color:#e74c3c;font-size:.82rem;background:#2a1010;border-radius:8px;padding:.75rem;text-align:center;width:100%;display:none}
+  #screen-playlist{padding:1.25rem;gap:1rem}
+  .screen-header{display:flex;align-items:center;gap:10px;padding-bottom:.5rem}
+  .back-btn{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1.3rem;padding:4px 8px 4px 0;line-height:1}
+  .screen-title{font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--gold)}
+  .playlist-list{display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1}
+  .playlist-item{display:flex;align-items:center;gap:12px;background:var(--groove);border-radius:10px;padding:11px;cursor:pointer;border:1.5px solid transparent;transition:border-color .15s,transform .1s}
+  .playlist-item:hover{border-color:var(--gold);transform:translateX(3px)}
+  .playlist-item img{width:50px;height:50px;border-radius:6px;object-fit:cover;background:#444;flex-shrink:0}
+  .pl-info{flex:1;min-width:0}
+  .pl-name{font-weight:500;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pl-count{font-size:.75rem;color:var(--muted);margin-top:2px}
+  .pl-arrow{color:var(--gold)}
+  .status-msg{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem;animation:pulse 1.5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  .err-msg{color:#e74c3c;font-size:.82rem;background:#2a1010;border-radius:8px;padding:.75rem;text-align:center}
+  #screen-setup{padding:1.25rem;gap:1.25rem;align-items:stretch}
+  .chosen-pl{background:var(--groove);border-radius:12px;padding:1rem;display:flex;align-items:center;gap:12px}
+  .chosen-pl img{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#444;flex-shrink:0}
+  .cp-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+  .cp-name{font-weight:500;font-size:.95rem;margin-top:2px}
+  .field-label{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.4rem}
+  .team-row{display:flex;gap:10px}
+  .team-row input{flex:1;background:var(--groove);border:1.5px solid #444;border-radius:10px;padding:12px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:.92rem;outline:none;transition:border-color .15s}
+  .team-row input:focus{border-color:var(--gold)}
+  .num-row{display:flex;align-items:center;gap:12px;background:var(--groove);border-radius:10px;padding:13px}
+  .num-row label{flex:1;font-size:.88rem}
+  .num-row input{width:62px;background:var(--vinyl);border:1.5px solid #555;border-radius:8px;padding:8px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:1rem;text-align:center;outline:none}
+  .num-row input:focus{border-color:var(--gold)}
+  .num-row span{font-size:.82rem;color:var(--muted)}
+  .start-btn{background:var(--gold);color:var(--vinyl);border:none;border-radius:50px;padding:16px;font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;cursor:pointer;margin-top:auto;transition:background .15s,transform .1s}
+  .start-btn:hover{background:var(--gold-light);transform:scale(1.02)}
+  .stepper{display:flex;align-items:center;gap:0;border:1.5px solid #555;border-radius:10px;overflow:hidden}
+  .stepper button{background:var(--groove);border:none;color:var(--cream);font-size:1.2rem;width:38px;height:38px;cursor:pointer;transition:background .15s;flex-shrink:0}
+  .stepper button:hover{background:#444}
+  .stepper span{min-width:44px;text-align:center;font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:var(--gold);background:var(--vinyl);height:38px;line-height:38px}
+  .team-names-container{display:flex;flex-direction:column;gap:8px}
+  .team-name-input{width:100%;background:var(--groove);border:1.5px solid #444;border-radius:10px;padding:11px 12px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:.92rem;outline:none;transition:border-color .15s}
+  .team-name-input:focus{border-color:var(--gold)}
+  #screen-game{background:var(--vinyl)}
+  .game-hdr{background:var(--groove);padding:11px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #333;flex-shrink:0}
+  .score-wrap{display:flex;gap:14px;align-items:center}
+  .score-chip{display:flex;flex-direction:column;align-items:center}
+  .sc-lbl{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .sc-num{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;line-height:1}
+  .ca{color:#e74c3c}.cb{color:#3498db}
+  .vs-lbl{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--muted)}
+  .target-lbl{font-size:.7rem;color:var(--muted);text-align:right;line-height:1.4}
+  .target-lbl strong{display:block;font-size:.88rem;color:var(--gold);font-weight:500}
+  .turn-bar{padding:8px 16px;text-align:center;font-size:.78rem;font-weight:500;letter-spacing:.08em;flex-shrink:0}
+  .turn-bar.a{background:var(--gold);color:var(--vinyl)}.turn-bar.b{background:#3498db;color:#fff}
+  .timer-area{display:flex;justify-content:center;padding:1.25rem 1rem .5rem;flex-shrink:0}
+  .timer-ring{position:relative;width:88px;height:88px}
+  .timer-ring svg{transform:rotate(-90deg)}
+  .r-bg{stroke:#333}.r-fill{stroke:var(--gold);stroke-dasharray:251.2;stroke-dashoffset:0;transition:stroke-dashoffset .95s linear,stroke .3s}
+  .r-fill.urgent{stroke:var(--red)}
+  .t-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:700}
+  .song-card{background:var(--groove);border-radius:14px;margin:.6rem 1rem;padding:1rem 1.1rem;border:1px solid #333;flex-shrink:0}
+  .track-row{display:flex;align-items:center;gap:12px;margin-bottom:.9rem}
+  .track-art{width:54px;height:54px;border-radius:8px;object-fit:cover;background:#333;flex-shrink:0}
+  .now-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1s ease-in-out infinite;margin-right:4px;vertical-align:middle}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+  .now-lbl{font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)}
+  .track-title{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;line-height:1.2;margin-top:3px}
+  .track-by{font-size:.78rem;color:var(--muted);margin-top:2px}
+  .checks{display:flex;flex-direction:column;gap:7px}
+  .chk{display:flex;align-items:center;gap:10px;background:var(--vinyl);border-radius:10px;padding:9px 11px;cursor:pointer;border:1.5px solid transparent;transition:border-color .15s,background .15s;user-select:none}
+  .chk:hover{border-color:#555}.chk.on{background:#172817;border-color:var(--green)}
+  .chk-box{width:21px;height:21px;border-radius:6px;border:1.5px solid #555;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,border-color .15s}
+  .chk.on .chk-box{background:var(--green);border-color:var(--green)}
+  .chk-icon{display:none}.chk.on .chk-icon{display:block}
+  .chk-lbl{font-size:.78rem;color:var(--muted);flex:1}
+  .chk-val{font-size:.82rem;font-weight:500;flex:2;text-align:right;padding-left:4px}
+  .pt-tag{background:#222;border-radius:5px;padding:2px 6px;font-size:.68rem;color:var(--gold);flex-shrink:0}
+  .actions{display:flex;gap:10px;margin:.6rem 1rem 1rem;flex-shrink:0}
+  .skip-btn{flex:1;background:none;border:1.5px solid #444;border-radius:10px;color:var(--muted);padding:12px;font-family:'DM Sans',sans-serif;font-size:.88rem;cursor:pointer;transition:border-color .15s,color .15s}
+  .skip-btn:hover{border-color:#777;color:var(--cream)}
+  .next-btn{flex:2;background:var(--gold);border:none;border-radius:10px;color:var(--vinyl);padding:12px;font-family:'DM Sans',sans-serif;font-size:.88rem;font-weight:500;cursor:pointer;transition:background .15s}
+  .next-btn:hover{background:var(--gold-light)}
+  .playback-status{font-size:.72rem;color:var(--muted);text-align:center;padding:.25rem 1rem;flex-shrink:0;min-height:1.2rem}
+  .pause-btn{flex:1;background:none;border:1.5px solid var(--gold);border-radius:10px;color:var(--gold);padding:11px;font-family:'DM Sans',sans-serif;font-size:.88rem;cursor:pointer;transition:background .15s,color .15s}
+  .pause-btn:hover{background:var(--gold);color:var(--vinyl)}
+  .pause-btn.paused{background:var(--gold);color:var(--vinyl)}
+  .stop-btn{flex:1;background:none;border:1.5px solid #c0392b;border-radius:10px;color:#c0392b;padding:11px;font-family:'DM Sans',sans-serif;font-size:.88rem;cursor:pointer;transition:background .15s,color .15s}
+  .stop-btn:hover{background:#c0392b;color:#fff}
+  #screen-roundend{padding:2rem 1.5rem;align-items:center;justify-content:center;gap:1.5rem;text-align:center}
+  .re-title{font-family:'Playfair Display',serif;font-size:2rem;color:var(--gold)}
+  .re-pts{font-size:3.5rem;font-weight:300}.re-pts span{color:var(--gold);font-weight:700}
+  .re-summary{font-size:.88rem;color:var(--muted)}
+  .scoreboard{background:var(--groove);border-radius:14px;padding:1.2rem;width:100%}
+  .sb-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333}
+  .sb-row:last-child{border-bottom:none}
+  .sb-team{font-weight:500}.sb-pts{font-family:'Playfair Display',serif;font-size:1.4rem}
+  .sb-pts.lead{color:var(--gold)}
+  .continue-btn{background:var(--gold);color:var(--vinyl);border:none;border-radius:50px;padding:14px 32px;font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;cursor:pointer;width:100%;transition:background .15s}
+  .continue-btn:hover{background:var(--gold-light)}
+  #screen-winner{padding:2rem 1.5rem;align-items:center;justify-content:center;gap:1.5rem;text-align:center}
+  .trophy{font-size:5rem}
+  .win-title{font-family:'Playfair Display',serif;font-size:2.5rem;color:var(--gold)}
+  .win-name{font-family:'Playfair Display',serif;font-size:3rem;font-weight:900}
+  .win-score{font-size:.92rem;color:var(--muted)}
+  .again-btn{background:none;border:1.5px solid var(--gold);color:var(--gold);border-radius:50px;padding:14px 32px;font-family:'DM Sans',sans-serif;font-size:1rem;cursor:pointer;width:100%;transition:background .15s,color .15s}
+  .again-btn:hover{background:var(--gold);color:var(--vinyl)}
+  .admin-link-btn{background:none;border:none;color:#555;font-size:.75rem;cursor:pointer;padding:.25rem;letter-spacing:.05em;margin-top:-.5rem}
+  .admin-link-btn:hover{color:var(--muted)}
+  .admin-screen{display:none;flex-direction:column;flex:1;background:var(--vinyl);padding:1.25rem;gap:1rem;overflow-y:auto}
+  .admin-screen.active{display:flex}
+  .admin-hdr{display:flex;align-items:center;gap:10px;padding-bottom:.5rem;border-bottom:1px solid #333;flex-shrink:0}
+  .admin-title{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold)}
+  .admin-section{background:var(--groove);border-radius:12px;padding:1rem}
+  .admin-section-title{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.75rem}
+  .admin-song-row{display:flex;align-items:center;gap:8px;padding:.6rem 0;border-bottom:1px solid #333;font-size:.82rem}
+  .admin-song-row:last-child{border-bottom:none}
+  .admin-badge{font-size:.65rem;padding:2px 7px;border-radius:20px;font-weight:500;flex-shrink:0}
+  .badge-new{background:#1a3a1a;color:#4caf50;border:1px solid #4caf50}
+  .badge-removed{background:#2a1010;color:#e74c3c;border:1px solid #e74c3c}
+  .badge-pending{background:#2a2010;color:var(--gold);border:1px solid var(--gold)}
+  .badge-approved{background:#1a1a2a;color:#3498db;border:1px solid #3498db}
+  .admin-input{flex:1;background:var(--vinyl);border:1.5px solid #444;border-radius:8px;padding:7px 10px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none;min-width:0}
+  .admin-input:focus{border-color:var(--gold)}
+  .admin-action-btn{background:var(--gold);border:none;border-radius:8px;padding:7px 12px;color:var(--vinyl);font-size:.78rem;font-weight:500;cursor:pointer;flex-shrink:0;white-space:nowrap}
+  .admin-action-btn:hover{background:var(--gold-light)}
+  .admin-action-btn.red{background:#c0392b;color:#fff}
+  .admin-action-btn.red:hover{background:#e74c3c}
+  .admin-action-btn.grey{background:#444;color:var(--cream)}
+  .admin-status{font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem;animation:pulse 1.5s ease-in-out infinite}
+  .admin-song-info{flex:1;min-width:0}
+  .admin-song-title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .admin-song-artist{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stats-hdr{display:flex;align-items:center;padding:1.25rem 1.25rem .5rem;flex-shrink:0}
+  .stats-content{display:flex;flex-direction:column;gap:1rem;padding:0 1rem 1rem;overflow-y:auto;flex:1}
+  .stats-team-card{background:var(--groove);border-radius:14px;padding:1.1rem;border:1px solid #333}
+  .stats-team-name{font-family:'Playfair Display',serif;font-size:1.3rem;margin-bottom:.75rem;padding-bottom:.6rem;border-bottom:1px solid #333}
+  .stats-team-name.a{color:#e74c3c}.stats-team-name.b{color:#3498db}
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stat-cell{background:var(--vinyl);border-radius:10px;padding:.7rem .9rem}
+  .stat-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+  .stat-value{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;line-height:1.2;margin-top:2px}
+  .stat-value.gold{color:var(--gold)}
+  .stat-pct{font-size:.72rem;color:var(--muted);margin-top:1px}
+  .stats-total-row{display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid #333;font-size:.88rem}
+  .stats-total-row:last-child{border-bottom:none}
+  .stats-total-row span:last-child{font-weight:500;color:var(--gold)}
+  .stats-section-label{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.4rem;margin-top:.25rem}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active">
+  <div class="logo-vinyl"></div>
+  <div class="logo-title">Under the Covers</div>
+  <div class="logo-sub">The Cover Song Trivia Game</div>
+  <button class="spotify-btn" onclick="loginSpotify()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+    Connect with Spotify
+  </button>
+  <div class="or-row">or</div>
+  <button class="demo-btn" onclick="startDemo()">Play with Built-in Song List</button>
+  <p class="hint">Spotify Premium required for audio playback.<br>Connects directly to the Under the Covers playlist.</p>
+  <button class="admin-link-btn" onclick="showAdminLogin()">⚙ Admin</button>
+  <div id="debug-box" class="debug-box"></div>
+  <div id="err-banner" class="err-banner"></div>
+</div>
+
+
+
+<!-- SETUP -->
+<div id="screen-setup" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" id="setup-back" onclick="showScreen('login')">&#8592;</button>
+    <div class="screen-title">Game Setup</div>
+  </div>
+  <div>
+    <div class="field-label">Number of Teams / Players</div>
+    <div class="num-row">
+      <label>How many teams?</label>
+      <div class="stepper">
+        <button onclick="changeTeamCount(-1)">−</button>
+        <span id="team-count-display">2</span>
+        <button onclick="changeTeamCount(1)">+</button>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="field-label">Team Names</div>
+    <div id="team-names-container" class="team-names-container"></div>
+  </div>
+  <div>
+    <div class="field-label">Winning Score</div>
+    <div class="num-row">
+      <label>First to reach</label>
+      <div class="stepper">
+        <button onclick="adjustNum('win-pts',-5)">−</button>
+        <span id="win-pts-display">25</span>
+        <button onclick="adjustNum('win-pts',5)">+</button>
+      </div>
+      <input type="hidden" id="win-pts" value="25">
+      <span>pts</span>
+    </div>
+  </div>
+  <div>
+    <div class="field-label">Round Timer</div>
+    <div class="num-row">
+      <label>Seconds per round</label>
+      <div class="stepper">
+        <button onclick="adjustNum('round-secs',-5)">−</button>
+        <span id="round-secs-display">60</span>
+        <button onclick="adjustNum('round-secs',5)">+</button>
+      </div>
+      <input type="hidden" id="round-secs" value="60">
+      <span>sec</span>
+    </div>
+  </div>
+  <button class="start-btn" onclick="startGame()">Start Game &#9654;</button>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <div class="game-hdr">
+    <div id="score-wrap" class="score-wrap"></div>
+    <div class="target-lbl">First to<strong id="hdr-target">25</strong></div>
+  </div>
+  <div id="turn-bar" class="turn-bar a">Team A's Turn</div>
+  <div class="timer-area">
+    <div class="timer-ring">
+      <svg width="88" height="88" viewBox="0 0 88 88">
+        <circle class="r-bg" cx="44" cy="44" r="39" stroke-width="6" fill="none"/>
+        <circle class="r-fill" id="r-fill" cx="44" cy="44" r="39" stroke-width="6" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="t-num" id="t-num">60</div>
+    </div>
+  </div>
+  <div class="song-card">
+    <div class="track-row">
+      <img id="s-art" class="track-art" src="" alt="">
+      <div>
+        <div class="now-lbl"><span class="now-dot"></span>Now Playing</div>
+        <div class="track-title" id="s-name">—</div>
+        <div class="track-by" id="s-by"></div>
+      </div>
+    </div>
+    <div class="checks">
+      <div class="chk" id="chk-title" onclick="toggle('title')">
+        <div class="chk-box"><svg class="chk-icon" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <span class="chk-lbl">Song title</span><span class="chk-val" id="ans-title">—</span><span class="pt-tag">+1</span>
+      </div>
+      <div class="chk" id="chk-cover" onclick="toggle('cover')">
+        <div class="chk-box"><svg class="chk-icon" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <span class="chk-lbl">Cover artist</span><span class="chk-val" id="ans-cover">—</span><span class="pt-tag">+1</span>
+      </div>
+      <div class="chk" id="chk-original" onclick="toggle('original')">
+        <div class="chk-box"><svg class="chk-icon" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <span class="chk-lbl">Original artist</span><span class="chk-val" id="ans-original">—</span><span class="pt-tag">+1</span>
+      </div>
+    </div>
+  </div>
+  <div id="playback-status" class="playback-status"></div>
+  <div class="actions">
+    <button class="skip-btn" onclick="skipSong()">Skip &#9654;&#9654;</button>
+    <button class="next-btn" onclick="nextSong()">Next Song &#9654;</button>
+  </div>
+  <div class="actions" style="margin-top:0">
+    <button class="pause-btn" id="pause-btn" onclick="togglePause()">&#9646;&#9646; Pause</button>
+    <button class="stop-btn" onclick="confirmStop()">&#9632; Stop Game</button>
+  </div>
+</div>
+
+<!-- ROUND END -->
+<div id="screen-roundend" class="screen">
+  <div class="re-title" id="re-title">Round Over!</div>
+  <div class="re-pts">+<span id="re-pts">0</span> pts</div>
+  <div class="re-summary" id="re-summary"></div>
+  <div class="scoreboard" id="re-board"></div>
+  <button class="continue-btn" id="next-turn-btn" onclick="nextTurn()">Next Team's Turn &#9654;</button>
+  <button class="again-btn" style="margin-top:.75rem;border-color:#888;color:#888;font-size:.82rem;padding:10px" onclick="viewStats('roundend')">View Stats</button>
+</div>
+
+<!-- ELIMINATION -->
+<div id="screen-elimination" class="screen">
+  <div style="padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;gap:1.5rem;text-align:center;flex:1;justify-content:center">
+    <div style="font-size:3rem">🎵</div>
+    <div style="font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--gold)">Round Complete!</div>
+    <div id="elim-message" style="font-size:.95rem;color:var(--cream);line-height:1.6"></div>
+    <div id="elim-eliminated" style="display:none;background:#2a1010;border:1.5px solid #c0392b;border-radius:12px;padding:1rem 1.25rem;width:100%">
+      <div style="font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:#e74c3c;margin-bottom:.5rem">Eliminated</div>
+      <div id="elim-eliminated-names" style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--cream)"></div>
+    </div>
+    <div id="elim-remaining" style="background:var(--groove);border-radius:12px;padding:1rem 1.25rem;width:100%">
+      <div style="font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.5rem">Still Playing</div>
+      <div id="elim-remaining-names" style="font-size:.9rem;color:var(--cream);line-height:1.8"></div>
+    </div>
+    <button class="continue-btn" id="elim-continue-btn" onclick="continueAfterElimination()">Start Round <span id="elim-round-num">2</span> &#9654;</button>
+  </div>
+</div>
+
+<!-- WINNER -->
+<div id="screen-winner" class="screen">
+  <div class="trophy">&#127942;</div>
+  <div class="win-title">Winner!</div>
+  <div class="win-name" id="w-name"></div>
+  <div class="win-score" id="w-score"></div>
+  <button class="again-btn" onclick="playAgain()">Play Again</button>
+  <button class="again-btn" style="margin-top:.5rem;border-color:#3498db;color:#3498db" onclick="viewStats('winner')">View Full Stats</button>
+</div>
+
+<!-- STATS -->
+<div id="screen-stats" class="screen">
+  <div class="stats-hdr">
+    <div class="screen-title" style="color:var(--gold)">Game Stats</div>
+  </div>
+  <div id="stats-content" class="stats-content"></div>
+  <div id="stats-footer" style="display:flex;flex-direction:column;gap:.5rem;padding:0 1rem 1.25rem"></div>
+</div>
+
+<!-- ADMIN LOGIN -->
+<div id="screen-admin-login" class="screen" style="align-items:center;justify-content:center;padding:2rem;gap:1.5rem">
+  <div style="font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--gold)">Admin Panel</div>
+  <input type="password" id="admin-pw-input" placeholder="Enter password" style="width:100%;background:var(--groove);border:1.5px solid #444;border-radius:10px;padding:13px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:1rem;outline:none;text-align:center" onkeydown="if(event.key==='Enter')checkAdminPw()">
+  <button class="continue-btn" onclick="checkAdminPw()">Enter</button>
+  <button class="back-btn" style="font-size:.85rem;color:var(--muted)" onclick="showScreen('login')">&#8592; Back</button>
+  <div id="admin-pw-error" style="color:#e74c3c;font-size:.82rem;display:none">Incorrect password</div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="screen-admin" class="admin-screen">
+  <div class="admin-hdr">
+    <button class="back-btn" onclick="showScreen('login')">&#8592;</button>
+    <div class="admin-title">Admin Panel</div>
+    <button class="admin-action-btn" style="margin-left:auto" onclick="syncPlaylist()">&#8635; Sync Playlist</button>
+  </div>
+  <div id="admin-status" class="admin-status" style="display:none">Loading...</div>
+  <div id="admin-new-songs" class="admin-section" style="display:none">
+    <div class="admin-section-title">&#x2795; New Songs — Needs Original Artist</div>
+    <div id="admin-new-list"></div>
+  </div>
+  <div id="admin-removed-songs" class="admin-section" style="display:none">
+    <div class="admin-section-title">&#x2716; Removed from Spotify Playlist</div>
+    <div id="admin-removed-list"></div>
+  </div>
+  <div id="admin-pending-songs" class="admin-section" style="display:none">
+    <div class="admin-section-title">&#x23F3; Pending Approval</div>
+    <div id="admin-pending-list"></div>
+  </div>
+  <div id="admin-approved-songs" class="admin-section">
+    <div class="admin-section-title">&#x2713; Approved Songs (<span id="admin-approved-count">0</span>)</div>
+    <div id="admin-approved-list"></div>
+  </div>
+</div>
+
+</div>
+<script>
+window.onerror=function(msg,src,line,col,err){
+  const b=document.getElementById('debug-box');
+  if(b){b.style.display='block';b.innerHTML+='<b style="color:#e74c3c">ERROR:</b> '+msg+' (line '+line+')<br>';}
+  return false;
+};
+window.onunhandledrejection=function(e){
+  const b=document.getElementById('debug-box');
+  if(b){b.style.display='block';b.innerHTML+='<b style="color:#e74c3c">PROMISE ERROR:</b> '+(e.reason?.message||e.reason)+'<br>';}
+};
+const CLIENT_ID = '274caba37a3d41ef917a10b396e54987';
+const SHEET_ID = '1BFnqxz-wWE_j8CiDO4kV_kN45Sb0YarKJ5HRAYA9QU8';
+const SHEETS_API_KEY = 'AIzaSyC-0TqqAX_Fk65_NlkTia-B9fkJQqzYpJ4';
+const SPOTIFY_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
+const ADMIN_PASSWORD = 'utc2024';
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+const DB=[
+  {t:"(Everything I Do) I Do It for You",c:"Brandy",o:"Bryan Adams"},
+  {t:"(I Can't Get No) Satisfaction",c:"Cat Power",o:"The Rolling Stones"},
+  {t:"(I Can't Help) Falling In Love With You",c:"UB40",o:"Neil Diamond"},
+  {t:"A Change Is Gonna Come",c:"Greta Van Fleet",o:"Sam Cooke"},
+  {t:"A Change Is Gonna Come",c:"The Neville Brothers",o:"Sam Cooke"},
+  {t:"A Hard Day's Night",c:"The Supremes",o:"The Beatles"},
+  {t:"A Pirate Looks At Forty",c:"Jack Johnson / Dave Matthews",o:"Jimmy Buffett"},
+  {t:"A Teenager in Love",c:"Red Hot Chili Peppers",o:"Dion DiMucci"},
+  {t:"Across the Universe",c:"Fiona Apple",o:"The Beatles"},
+  {t:"Across the Universe",c:"David Bowie",o:"The Beatles"},
+  {t:"Addicted To Love",c:"Florence + The Machine",o:"Robert Palmer"},
+  {t:"Africa",c:"Weezer",o:"Toto"},
+  {t:"After Midnight",c:"Eric Clapton",o:"JJ Cale"},
+  {t:"Ain't No Love In The Heart Of The City",c:"Black Pumas",o:"Bobby Bland"},
+  {t:"Ain't No Sunshine",c:"Buddy Guy / Tracy Chapman",o:"Bill Withers"},
+  {t:"All Along The Watchtower",c:"Jimi Hendrix",o:"Bob Dylan"},
+  {t:"All Apologies",c:"Sinéad O'Connor",o:"Nirvana"},
+  {t:"All Together Now",c:"André 3000",o:"The Beatles"},
+  {t:"American Woman",c:"Lenny Kravitz",o:"The Guess Who"},
+  {t:"Angel",c:"Shaggy / Rayvon",o:"Steve Miller"},
+  {t:"Angel From Montgomery",c:"Susan Tedeschi",o:"John Prine"},
+  {t:"Angel from Montgomery",c:"Bonnie Raitt",o:"John Prine"},
+  {t:"Atlantic City",c:"The Band",o:"Bruce Springsteen"},
+  {t:"Baby One More Time",c:"Ed Sheeran",o:"Britney Spears"},
+  {t:"Bad Company",c:"Bad Company / Charley Crockett",o:"Bad Company"},
+  {t:"Bad Romance",c:"Thirty Seconds To Mars",o:"Lady Gaga"},
+  {t:"Bang A Gong (Get It On)",c:"U2 / Elton John",o:"T. Rex"},
+  {t:"Beat It",c:"Fall Out Boy / John Mayer",o:"Michael Jackson"},
+  {t:"Behind Blue Eyes",c:"Limp Bizkit",o:"The Who"},
+  {t:"Bennie & The Jets",c:"BØRNS",o:"Elton John"},
+  {t:"Big Yellow Taxi",c:"Counting Crows / Vanessa Carlton",o:"Joni Mitchell"},
+  {t:"Billie Jean",c:"Chris Cornell",o:"Michael Jackson"},
+  {t:"Blackbird",c:"Sarah McLachlan",o:"The Beatles"},
+  {t:"Bohemian Rhapsody",c:"Panic! At The Disco",o:"Queen"},
+  {t:"Born This Way",c:"Orville Peck",o:"Lady Gaga"},
+  {t:"Breakdown",c:"Grace Jones",o:"Tom Petty"},
+  {t:"California Dreamin'",c:"Sia",o:"The Mamas & The Papas"},
+  {t:"California Dreamin'",c:"Bobby Womack",o:"The Mamas & The Papas"},
+  {t:"Can't Help Falling in Love",c:"Beck",o:"Elvis"},
+  {t:"Can't Take My Eyes Off of You",c:"Ms. Lauryn Hill",o:"Frankie Valli"},
+  {t:"Can't You See",c:"Waylon Jennings",o:"The Marshall Tucker Band"},
+  {t:"Candle In The Wind",c:"Ed Sheeran",o:"Elton John"},
+  {t:"Champagne Supernova",c:"OneRepublic",o:"Oasis"},
+  {t:"Come Together",c:"Soundgarden",o:"The Beatles"},
+  {t:"Come Together",c:"Michael Jackson",o:"The Beatles"},
+  {t:"Crazy",c:"Kacey Musgraves",o:"Gnarls Barkley"},
+  {t:"Crazy",c:"Violent Femmes",o:"Gnarls Barkley"},
+  {t:"Creep",c:"Brandi Carlile",o:"Radiohead"},
+  {t:"Dancing In The Dark",c:"Hot Chip",o:"Bruce Springsteen"},
+  {t:"Dancing In The Dark",c:"Benny Sings",o:"Bruce Springsteen"},
+  {t:"Dancing in the Moonlight",c:"alt-J",o:"Toploader"},
+  {t:"Dancing On My Own",c:"Elle Fanning",o:"Robyn"},
+  {t:"Dancing with Myself",c:"blink-182",o:"Billy Idol"},
+  {t:"Daniel",c:"Sam Smith",o:"Elton John"},
+  {t:"Day Tripper",c:"Jimi Hendrix",o:"The Beatles"},
+  {t:"Dead Flowers",c:"Townes Van Zandt",o:"The Rolling Stones"},
+  {t:"Dear Prudence",c:"Jerry Garcia",o:"The Beatles"},
+  {t:"Do You Really Want To Hurt Me",c:"Violent Femmes",o:"Culture Club"},
+  {t:"Doin' Time",c:"Lana Del Rey",o:"Sublime"},
+  {t:"Don't Let The Sun Go Down On Me",c:"Miley Cyrus",o:"Elton John"},
+  {t:"Don't Speak",c:"Carly Rae Jepsen",o:"No Doubt"},
+  {t:"Don't Think Twice, It's All Right",c:"Susan Tedeschi",o:"Bob Dylan"},
+  {t:"Don't You Want Me",c:"Bahamas / The Weather Station",o:"The Human League"},
+  {t:"Down On The Corner",c:"Bryan Adams",o:"Creedence Clearwater Revival"},
+  {t:"Dream A Little Dream",c:"Eddie Vedder",o:"The Beatles"},
+  {t:"Drive",c:"Aimee Mann",o:"Ella Fitzgerald / Louis Armstrong"},
+  {t:"Drops Of Jupiter",c:"Taylor Swift",o:"Train"},
+  {t:"Easy",c:"Faith No More",o:"Commodores"},
+  {t:"Eleanor Rigby",c:"Aretha Franklin",o:"The Beatles"},
+  {t:"Escape (The Pina Colada Song)",c:"Jack Johnson",o:"Rupert Holmes"},
+  {t:"Everybody Hurts",c:"Joe Cocker",o:"R.E.M."},
+  {t:"Everybody's Talkin'",c:"Iggy Pop",o:"Harry Nilsson"},
+  {t:"Faith",c:"Limp Bizkit",o:"George Michael"},
+  {t:"Fame",c:"Duran Duran",o:"David Bowie"},
+  {t:"Fast Car",c:"Black Pumas",o:"Tracy Chapman"},
+  {t:"Fast Car",c:"Luke Combs",o:"Tracy Chapman"},
+  {t:"Fever",c:"The Cramps",o:"Peggy Lee"},
+  {t:"Fire",c:"The Pointer Sisters",o:"Bruce Springsteen"},
+  {t:"Fix You",c:"Ben Harper / Soweto Gospel Choir",o:"Coldplay"},
+  {t:"Fix You",c:"Kacey Musgraves",o:"Coldplay"},
+  {t:"Fly Like an Eagle",c:"Seal",o:"Steve Miller Band"},
+  {t:"Fortunate Son",c:"Cat Power",o:"Creedence Clearwater Revival"},
+  {t:"Free Fallin'",c:"John Mayer",o:"Tom Petty"},
+  {t:"Fresh Prince of Bel-Air",c:"Neil Young",o:"Will Smith"},
+  {t:"Girl Crush",c:"Harry Styles",o:"Little Big Town"},
+  {t:"Girl, You'll Be a Woman Soon",c:"Urge Overkill",o:"Neil Diamond"},
+  {t:"Go Your Own Way",c:"The Cranberries",o:"Fleetwood Mac"},
+  {t:"Golden Slumbers",c:"Dua Lipa",o:"The Beatles"},
+  {t:"Goodbye Yellow Brick Road",c:"Sara Bareilles",o:"Elton John"},
+  {t:"Graceland",c:"Justin Townes Earle",o:"Paul Simon"},
+  {t:"Hallelujah",c:"Jeff Buckley",o:"Leonard Cohen"},
+  {t:"Hallelujah",c:"Rufus Wainwright",o:"Leonard Cohen"},
+  {t:"Hand In My Pocket",c:"Imagine Dragons",o:"Alanis Morissette"},
+  {t:"Hard To Handle",c:"The Black Crowes",o:"Otis Redding"},
+  {t:"Harvest Moon",c:"Poolside",o:"Neil Young"},
+  {t:"Harvest Moon",c:"Lord Huron",o:"Neil Young"},
+  {t:"Have You Ever Seen The Rain",c:"The Lumineers",o:"Creedence Clearwater Revival"},
+  {t:"Have You Ever Seen the Rain",c:"Johnny Cash",o:"Creedence Clearwater Revival"},
+  {t:"Heart Of Glass",c:"Miley Cyrus",o:"Blondie"},
+  {t:"Heart-Shaped Box",c:"Glass Animals",o:"Nirvana"},
+  {t:"Help!",c:"Oasis",o:"The Beatles"},
+  {t:"Here Comes The Rain Again",c:"Macy Gray",o:"Eurythmics"},
+  {t:"Here Comes The Sun",c:"Richie Havens",o:"The Beatles"},
+  {t:"Heroes",c:"Peter Gabriel",o:"David Bowie"},
+  {t:"Hey Jude",c:"Elvis Presley",o:"The Beatles"},
+  {t:"Hey Ya!",c:"Panic! At The Disco",o:"OutKast"},
+  {t:"Hey, Hey What Can I Do",c:"Hootie & The Blowfish",o:"Led Zeppelin"},
+  {t:"Higher Ground",c:"Red Hot Chili Peppers",o:"Stevie Wonder"},
+  {t:"Higher Love",c:"James Vincent McMorrow",o:"Steve Winwood"},
+  {t:"Higher Love",c:"Kygo / Whitney Houston",o:"Steve Winwood"},
+  {t:"Hold On, We're Going Home",c:"Lykke Li",o:"Drake"},
+  {t:"Hotel California",c:"Gipsy Kings",o:"Eagles"},
+  {t:"House of the Rising Sun",c:"The White Buffalo",o:"The Animals"},
+  {t:"How You Remind Me",c:"Avril Lavigne",o:"Nickelback"},
+  {t:"Hurt",c:"Johnny Cash",o:"Nine Inch Nails"},
+  {t:"I Can't Make U Love Me",c:"Prince",o:"George Michael"},
+  {t:"I Get Around",c:"Red Hot Chili Peppers",o:"The Beach Boys"},
+  {t:"I Got You Babe",c:"UB40 / Chrissie Hynde",o:"Sonny & Cher"},
+  {t:"I Got You Babe",c:"Etta James",o:"Sonny & Cher"},
+  {t:"I Got You Babe",c:"Bahamas",o:"Sonny & Cher"},
+  {t:"I Heard It Through The Grapevine",c:"Creedence Clearwater Revival",o:"Marvin Gaye"},
+  {t:"I Heard It Through the Grapevine",c:"Ella Fitzgerald",o:"Marvin Gaye"},
+  {t:"I Just Called to Say I Love You",c:"John Prine / The Secret Sisters",o:"Stevie Wonder"},
+  {t:"I Shall Be Released",c:"The Band",o:"Bob Dylan / The Band"},
+  {t:"I Think We're Alone Now",c:"Billie Joe Armstrong / Green Day",o:"Tommy James & The Shondells"},
+  {t:"I Think We're Alone Now",c:"Tiffany",o:"Tommy James & The Shondells"},
+  {t:"I Wanna Dance With Somebody (Who Loves Me)",c:"Fall Out Boy",o:"Whitney Houston"},
+  {t:"I Want To Know What Love Is",c:"Clay Aiken / Suzie McNeil",o:"Foreigner"},
+  {t:"I Was Made For Lovin' You",c:"YUNGBLUD",o:"Kiss"},
+  {t:"I Will Always Love You",c:"Whitney Houston",o:"Dolly Parton"},
+  {t:"I Will Survive",c:"CAKE",o:"Gloria Gaynor"},
+  {t:"I Won't Back Down",c:"Johnny Cash",o:"Tom Petty"},
+  {t:"I'd Rather Go Blind",c:"Dua Lipa",o:"Etta James"},
+  {t:"I'm Goin' Down",c:"Vampire Weekend",o:"Bruce Springsteen"},
+  {t:"I'm Not the Only One",c:"Dua Lipa",o:"Sam Smith"},
+  {t:"I'm On Fire",c:"Chromatics",o:"Bruce Springsteen"},
+  {t:"I'm On Fire",c:"Shakey Graves",o:"Bruce Springsteen"},
+  {t:"I'm On Fire",c:"AWOLNATION",o:"Bruce Springsteen"},
+  {t:"If I Ain't Got You",c:"Maroon 5",o:"Alicia Keys"},
+  {t:"If I Fell",c:"Maroon 5",o:"The Beatles"},
+  {t:"If Not for You",c:"George Harrison",o:"Bob Dylan"},
+  {t:"Imagine",c:"Avril Lavigne",o:"John Lennon"},
+  {t:"Immigrant Song",c:"Trent Reznor / Karen O",o:"Led Zeppelin"},
+  {t:"In Bloom",c:"Sturgill Simpson",o:"Nirvana"},
+  {t:"In My Life",c:"Ozzy Osbourne",o:"John Lennon"},
+  {t:"In My Life",c:"Johnny Cash",o:"John Lennon"},
+  {t:"Instant Karma",c:"U2",o:"John Lennon"},
+  {t:"Into The Black",c:"Chromatics",o:"Neil Young"},
+  {t:"Into the Mystic",c:"Gretchen Wilson",o:"Van Morrison"},
+  {t:"It Ain't Me Babe",c:"Johnny Cash",o:"Bob Dylan"},
+  {t:"Jealous Guy",c:"The Weeknd",o:"John Lennon"},
+  {t:"Jealous Guy",c:"Donny Hathaway",o:"John Lennon"},
+  {t:"Johnny B Goode",c:"The Beatles",o:"Chuck Berry"},
+  {t:"Jolene",c:"The White Stripes",o:"Dolly Parton"},
+  {t:"Jolene",c:"Zac Brown Band",o:"Ray La Montagne"},
+  {t:"JOLENE",c:"Beyoncé",o:"Dolly Parton"},
+  {t:"Just Breathe",c:"Willie Nelson / Lukas Nelson",o:"Eddie Vedder / Pearl Jam"},
+  {t:"just like heaven",c:"The Lumineers",o:"The Cure"},
+  {t:"Just My Imagination (Running Away With Me)",c:"The Rolling Stones",o:"The Temptations"},
+  {t:"Killing Me Softly With His Song",c:"Fugees / Ms. Lauryn Hill",o:"Roberta Flack"},
+  {t:"King of Pain",c:"Alanis Morissette",o:"The Police"},
+  {t:"Kiss",c:"Kelly Clarkson",o:"Prince"},
+  {t:"Knockin' On Heaven's Door",c:"Guns N' Roses",o:"Bob Dylan"},
+  {t:"Kung Fu Fighting",c:"CeeLo Green",o:"Carl Douglas"},
+  {t:"Landslide",c:"The Smashing Pumpkins",o:"Fleetwood Mac"},
+  {t:"Landslide",c:"The Chicks",o:"Fleetwood Mac"},
+  {t:"Let's Go Crazy",c:"Incubus",o:"Prince"},
+  {t:"Light My Fire",c:"José Feliciano",o:"The Doors"},
+  {t:"Like a Virgin",c:"Mötley Crüe",o:"Madonna"},
+  {t:"Live And Let Die",c:"Guns N' Roses",o:"Paul McCartney"},
+  {t:"Long, Long Time",c:"Jerry Jeff Walker",o:"Linda Ronstadt"},
+  {t:"Love Is Blindness",c:"Jack White",o:"U2"},
+  {t:"Love On The Brain",c:"Cold War Kids / Bishop Briggs",o:"Rihanna"},
+  {t:"Love Song",c:"311",o:"The Cure"},
+  {t:"Loving Cup",c:"Phish",o:"The Rolling Stones"},
+  {t:"Many Rivers To Cross",c:"Joe Cocker",o:"Jimmy Cliff"},
+  {t:"Message In a Bottle",c:"John Mayer",o:"The Police"},
+  {t:"Midnight Rider",c:"Train",o:"The Allman Brothers Band"},
+  {t:"Mood Indigo",c:"Frank Sinatra",o:"Duke Ellington"},
+  {t:"Mr. Tambourine Man",c:"Stevie Wonder",o:"Bob Dylan"},
+  {t:"Mrs. Robinson",c:"The Lemonheads",o:"Simon & Garfunkel"},
+  {t:"My Prerogative",c:"Britney Spears",o:"Bobby Brown"},
+  {t:"My Sweet Lord",c:"Jim James",o:"George Harrison"},
+  {t:"Never Been to Spain",c:"Waylon Jennings",o:"Three Dog Night"},
+  {t:"Never Tear Us Apart",c:"The National",o:"INXS"},
+  {t:"New York",c:"Cat Power",o:"Frank Sinatra"},
+  {t:"No Diggity",c:"Chet Faker",o:"Blackstreet"},
+  {t:"No Diggity",c:"Nick Murphy",o:"Blackstreet"},
+  {t:"No One",c:"Cold War Kids",o:"Alicia Keys"},
+  {t:"No Surprises",c:"Jeremiah Fraites / Gregory Alan Isakov",o:"Radiohead"},
+  {t:"Nothing Compares 2 U",c:"Chris Cornell",o:"Prince"},
+  {t:"Nothing Compares 2 U",c:"Sinéad O'Connor",o:"Prince"},
+  {t:"Nothing Else Matters",c:"My Morning Jacket",o:"Metallica"},
+  {t:"Nothing Else Matters",c:"Chris Stapleton",o:"Metallica"},
+  {t:"One",c:"Joe Cocker",o:"U2"},
+  {t:"One More Try",c:"LeAnn Rimes",o:"George Michael"},
+  {t:"Only Wanna Be With You",c:"Post Malone",o:"Hootie & The Blowfish"},
+  {t:"Pale Blue Eyes",c:"R.E.M.",o:"The Velvet Underground"},
+  {t:"Patience",c:"Chris Cornell",o:"Guns N' Roses"},
+  {t:"Peggy Sue",c:"John Lennon",o:"Buddy Holly"},
+  {t:"People Get Ready",c:"Jeff Beck / Rod Stewart",o:"Curtis Mayfield"},
+  {t:"Personal Jesus",c:"Johnny Cash",o:"Depeche Mode"},
+  {t:"Personal Jesus",c:"Def Leppard",o:"Depeche Mode"},
+  {t:"Please Mister Postman",c:"The Beatles",o:"The Carpenters"},
+  {t:"Pony",c:"Leon Bridges",o:"Ginuwine"},
+  {t:"Proud Mary",c:"Tina Turner",o:"Creedence Clearwater Revival"},
+  {t:"Proud Mary",c:"Ike & Tina Turner",o:"Creedence Clearwater Revival"},
+  {t:"Purple Rain",c:"Dwight Yoakam",o:"Prince"},
+  {t:"Red Red Wine",c:"UB40",o:"Neil Diamond"},
+  {t:"Redemption Song",c:"Johnny Cash / Joe Strummer",o:"Bob Marley"},
+  {t:"Respect",c:"Aretha Franklin",o:"Otis Redding"},
+  {t:"Respect",c:"Kelly Clarkson",o:"Otis Redding"},
+  {t:"Rich Girl",c:"Nina Simone",o:"Hall & Oates"},
+  {t:"Rocket Man",c:"My Morning Jacket",o:"Elton John"},
+  {t:"Rolling In The Deep",c:"Greta Van Fleet",o:"Adele"},
+  {t:"Romeo And Juliet",c:"The Killers",o:"Dire Straits"},
+  {t:"Roxanne",c:"George Michael",o:"The Police"},
+  {t:"Running Up That Hill",c:"Chromatics",o:"Kate Bush"},
+  {t:"Saturday Night's Alright (For Fighting)",c:"Nickelback",o:"Elton John"},
+  {t:"Save It For Later",c:"Eddie Vedder",o:"The English Beat"},
+  {t:"Say My Name",c:"Hozier",o:"Destiny's Child"},
+  {t:"September",c:"Taylor Swift",o:"Earth, Wind & Fire"},
+  {t:"Sex And Candy",c:"Maroon 5",o:"Marcy Playground"},
+  {t:"Sexual Healing",c:"Hot Chip",o:"Marvin Gaye"},
+  {t:"Shake It Off",c:"Ryan Adams",o:"Taylor Swift"},
+  {t:"Shakedown Street",c:"Poolside",o:"Grateful Dead"},
+  {t:"Signed Sealed Delivered",c:"Elton John",o:"Stevie Wonder"},
+  {t:"Signed, Sealed, Delivered (I'm Yours)",c:"Rufus Wainwright",o:"Stevie Wonder"},
+  {t:"Smalltown Boy",c:"Orville Peck",o:"Bronski Beat"},
+  {t:"Smells Like Teen Spirit",c:"Tori Amos",o:"Nirvana"},
+  {t:"Smells Like Teen Spirit",c:"Patti Smith",o:"Nirvana"},
+  {t:"Smooth Criminal",c:"Alien Ant Farm",o:"Michael Jackson"},
+  {t:"Sneakin' Sally Thru The Alley",c:"Phish",o:"Robert Palmer"},
+  {t:"Something",c:"Norah Jones",o:"George Harrison"},
+  {t:"Somewhere Only We Know",c:"Lily Allen",o:"Keane"},
+  {t:"Space Oddity",c:"Natalie Merchant",o:"David Bowie"},
+  {t:"Spirit In The Sky",c:"Elton John",o:"Norman Greenbaum"},
+  {t:"Stand By Me",c:"Florence + The Machine",o:"Ben E. King"},
+  {t:"Stand By Me",c:"John Lennon",o:"Ben E. King"},
+  {t:"Stay",c:"Thirty Seconds To Mars",o:"Rihanna"},
+  {t:"Stay",c:"Cat Power",o:"Rihanna"},
+  {t:"Stay With Me",c:"The Temptations",o:"Sam Smith"},
+  {t:"Strange Overtones",c:"Poolside",o:"David Byrne"},
+  {t:"Strawberry Fields Forever",c:"Richie Havens",o:"The Beatles"},
+  {t:"Strawberry Fields Forever",c:"Ben Harper",o:"The Beatles"},
+  {t:"Streets of Philadelphia",c:"Waxahatchee",o:"Bruce Springsteen"},
+  {t:"Suzanne",c:"Nina Simone",o:"Leonard Cohen"},
+  {t:"Sweet Child O' Mine",c:"Sheryl Crow",o:"Guns N' Roses"},
+  {t:"Sweet Jane",c:"Cowboy Junkies",o:"Lou Reed"},
+  {t:"Tainted Love",c:"Marilyn Manson",o:"Soft Cell"},
+  {t:"Tainted Love",c:"Milky Chance",o:"Soft Cell"},
+  {t:"Take Me Home, Country Roads",c:"Toots & The Maytals",o:"John Denver"},
+  {t:"Take Me Home, Country Roads",c:"Lana Del Rey",o:"John Denver"},
+  {t:"Take Me to the River",c:"Talking Heads",o:"Al Green"},
+  {t:"Take My Breath Away",c:"My Morning Jacket",o:"Berlin"},
+  {t:"Take The Money And Run",c:"Run–D.M.C. / Everlast",o:"Steve Miller Band"},
+  {t:"Tempted",c:"Erykah Badu / James Poyser",o:"Squeeze"},
+  {t:"Tennessee Whiskey",c:"Chris Stapleton",o:"David Allen Coe"},
+  {t:"That Don't Impress Me Much",c:"HAIM",o:"Shania Twain"},
+  {t:"The Boxer",c:"Mumford & Sons",o:"Paul Simon"},
+  {t:"The Chain",c:"José Feliciano",o:"Fleetwood Mac"},
+  {t:"The First Cut Is the Deepest",c:"Rod Stewart",o:"Cat Stevens"},
+  {t:"The First Cut Is The Deepest",c:"Sheryl Crow",o:"Cat Stevens"},
+  {t:"The First Time Ever I Saw Your Face",c:"James Blake",o:"Roberta Flack"},
+  {t:"The Man Who Sold The World",c:"Nirvana",o:"David Bowie"},
+  {t:"The Promise",c:"Sturgill Simpson",o:"When in Rome"},
+  {t:"The Sound of Silence",c:"Disturbed",o:"Simon & Garfunkel"},
+  {t:"The Way You Do The Things You Do",c:"Jerry Garcia Band",o:"The Temptations"},
+  {t:"The Weight",c:"Aretha Franklin",o:"The Band"},
+  {t:"Tiny Dancer",c:"Florence + The Machine",o:"Elton John"},
+  {t:"Tonight, Tonight",c:"Passion Pit",o:"The Smashing Pumpkins"},
+  {t:"Toxic",c:"Mark Ronson",o:"Britney Spears"},
+  {t:"Travelin' Band",c:"Elton John",o:"Creedence Clearwater Revival"},
+  {t:"Turn The Page",c:"Metallica",o:"Bob Seger"},
+  {t:"Two of Us",c:"Aimee Mann",o:"The Beatles"},
+  {t:"Unchained Melody",c:"Norah Jones",o:"Righteous Brothers"},
+  {t:"Under Pressure",c:"Karen O / Willie Nelson",o:"David Bowie / Queen"},
+  {t:"Unknown Legend",c:"Shovels & Rope / Shakey Graves",o:"Neil Young"},
+  {t:"Use Somebody",c:"Shawn Mendes",o:"Kings Of Leon"},
+  {t:"Use Your Love",c:"Katy Perry",o:"The Outfield"},
+  {t:"Waitin' 'Round to Die",c:"Whitey Morgan and the 78's",o:"Townes Van Zandt"},
+  {t:"Waiting Around to Die",c:"Michael Kiwanuka",o:"Townes Van Zandt"},
+  {t:"Waste",c:"Dave Matthews",o:"Phish"},
+  {t:"Watching The Wheels",c:"Aloe Blacc",o:"John Lennon"},
+  {t:"Waterfalls",c:"Death Cab for Cutie",o:"TLC"},
+  {t:"We Can Work It Out",c:"Stevie Wonder",o:"The Beatles"},
+  {t:"We Will Rock You",c:"Nickelback",o:"Queen"},
+  {t:"What The World Needs Now",c:"Cat Power",o:"Burt Bacharach"},
+  {t:"What's Going On",c:"John Legend",o:"Marvin Gaye"},
+  {t:"What's Going On",c:"U2",o:"Marvin Gaye"},
+  {t:"When Doves Cry",c:"Patti Smith",o:"Prince"},
+  {t:"Whole Lotta Love",c:"Santana / Chris Cornell",o:"Led Zeppelin"},
+  {t:"Wicked Game",c:"Céline Dion / Chris Isaak",o:"Chris Isaak"},
+  {t:"Wildflowers",c:"Miley Cyrus",o:"Tom Petty"},
+  {t:"Wish You Were Here",c:"Cody Jinks",o:"Pink Floyd"},
+  {t:"With a Little Help from My Friends",c:"Joe Cocker",o:"The Beatles"},
+  {t:"Wonderwall",c:"Ryan Adams",o:"Oasis"},
+  {t:"Word Up!",c:"Korn",o:"Cameo"},
+  {t:"You Are The Sunshine Of My Life",c:"Jack White",o:"Stevie Wonder"},
+  {t:"You Can't Always Get What You Want",c:"Rusted Root",o:"The Rolling Stones"},
+  {t:"You're All I've Got Tonight",c:"The Smashing Pumpkins",o:"The Cars"},
+  {t:"Zombie",c:"Miley Cyrus",o:"The Cranberries"},
+];
+
+const TRACKS = [
+  {t:"Purple Rain",c:"Dwight Yoakam",o:"Prince",uri:"spotify:track:6eo04yKCNmMegAvdQPEhm8"},
+  {t:"Into The Black",c:"Chromatics",o:"Neil Young",uri:"spotify:track:6NQfUZb5VummNR8rozb8Ic"},
+  {t:"Ain't No Love In The Heart Of The City",c:"Black Pumas",o:"Bobby Bland",uri:"spotify:track:7scVLMa5I62SAMmbZnF5wI"},
+  {t:"One",c:"Joe Cocker",o:"U2",uri:"spotify:track:6kICkyQsOD3KvGRDfUsehw"},
+  {t:"Here Comes The Sun",c:"Richie Havens",o:"The Beatles",uri:"spotify:track:0hhzJEusz6r7f0eL1Uc8kw"},
+  {t:"My Sweet Lord",c:"Jim James",o:"George Harrison",uri:"spotify:track:6k1clpTZEaUIdpt7yVupFs"},
+  {t:"Graceland",c:"Justin Townes Earle",o:"Paul Simon",uri:"spotify:track:2UduNMj9tpsEcBTur8VwH2"},
+  {t:"Fast Car",c:"Black Pumas",o:"Tracy Chapman",uri:"spotify:track:4v4hTn4ojuhMurbBzRnbqa"},
+  {t:"Escape (The Pina Colada Song)",c:"Jack Johnson",o:"Rupert Holmes",uri:"spotify:track:3dnswoe0E6Rf1vKdKzNdKs"},
+  {t:"You Can't Always Get What You Want",c:"Rusted Root",o:"The Rolling Stones",uri:"spotify:track:6UHbDgxRd8mPzugNInBx3y"},
+  {t:"Loving Cup",c:"Phish",o:"The Rolling Stones",uri:"spotify:track:2KBwelELj648tNPvhIyEGp"},
+  {t:"Killing Me Softly With His Song",c:"Fugees / Ms. Lauryn Hill",o:"Roberta Flack",uri:"spotify:track:0Q0IVlqMV64kNLlwjPj0Hl"},
+  {t:"Don't Think Twice, It's All Right",c:"Susan Tedeschi",o:"Bob Dylan",uri:"spotify:track:7eG1BnCa7VYmbNM5uMuCRN"},
+  {t:"Goodbye Yellow Brick Road",c:"Sara Bareilles",o:"Elton John",uri:"spotify:track:5Qt6ireK9HgLNTQHQswq6H"},
+  {t:"The Way You Do The Things You Do",c:"Jerry Garcia Band",o:"The Temptations",uri:"spotify:track:3WiLOtxlGAxZtEfKtQynNT"},
+  {t:"Bennie & The Jets",c:"BØRNS",o:"Elton John",uri:"spotify:track:4f2aupm9UaR6Zqknh3Ph8W"},
+  {t:"Sneakin' Sally Thru The Alley",c:"Phish",o:"Robert Palmer",uri:"spotify:track:0gpM7wJsLuZukHR2KqOlbB"},
+  {t:"Hey, Hey What Can I Do",c:"Hootie & The Blowfish",o:"Led Zeppelin",uri:"spotify:track:5tv2Xb1s1CyeM5VbLyavCC"},
+  {t:"Ain't No Sunshine",c:"Buddy Guy / Tracy Chapman",o:"Bill Withers",uri:"spotify:track:1amH1FjaNDAaZVpHWzcztW"},
+  {t:"I'd Rather Go Blind",c:"Dua Lipa",o:"Etta James",uri:"spotify:track:5nMkd5cq4JPZqAoQTXv8Wm"},
+  {t:"Patience",c:"Chris Cornell",o:"Guns N' Roses",uri:"spotify:track:7n3u7RrzdXGVcclBEp9aSa"},
+  {t:"Stay",c:"Thirty Seconds To Mars",o:"Rihanna",uri:"spotify:track:78vpAeb6a3bD03scfv71Z8"},
+  {t:"Creep",c:"Brandi Carlile",o:"Radiohead",uri:"spotify:track:57BUJmnfSiPJ0V76Bq6MGB"},
+  {t:"A Teenager in Love",c:"Red Hot Chili Peppers",o:"Dion DiMucci",uri:"spotify:track:5kuvOXaO2WiHwES81fSeu3"},
+  {t:"Here Comes The Rain Again",c:"Macy Gray",o:"Eurythmics",uri:"spotify:track:1jZE6f2b7IWlkCYtzqm1zk"},
+  {t:"Daniel",c:"Sam Smith",o:"Elton John",uri:"spotify:track:7w0CSwfUCZ0oYfEJxq7nxL"},
+  {t:"Nothing Compares 2 U",c:"Chris Cornell",o:"Prince",uri:"spotify:track:0tUELgOuOJ3KCsYMDDsNvD"},
+  {t:"Take Me Home, Country Roads",c:"Toots & The Maytals",o:"John Denver",uri:"spotify:track:389R9arpxdfl0JA450Qn9m"},
+  {t:"Strawberry Fields Forever",c:"Richie Havens",o:"The Beatles",uri:"spotify:track:37HFYXBM6Hb2EcoOXVMqy7"},
+  {t:"Tennessee Whiskey",c:"Chris Stapleton",o:"David Allen Coe",uri:"spotify:track:3fqwjXwUGN6vbzIwvyFMhx"},
+  {t:"Higher Love",c:"James Vincent McMorrow",o:"Steve Winwood",uri:"spotify:track:5ita5p8yV0UbQNuCXNZQgM"},
+  {t:"Rocket Man",c:"My Morning Jacket",o:"Elton John",uri:"spotify:track:03auri1kCcQxFDvU3yoD3E"},
+  {t:"Hey Jude",c:"Elvis Presley",o:"The Beatles",uri:"spotify:track:3tNyFKxcFszV0TiDDJsYVx"},
+  {t:"Harvest Moon",c:"Poolside",o:"Neil Young",uri:"spotify:track:4r608qFvEK55vdNyOPtnwf"},
+  {t:"In Bloom",c:"Sturgill Simpson",o:"Nirvana",uri:"spotify:track:5StrN0F4XI5e0BHP32THhl"},
+  {t:"Strange Overtones",c:"Poolside",o:"David Byrne",uri:"spotify:track:6dOnTK9bgYLUyFgnymmQ8S"},
+  {t:"Stand By Me",c:"Florence + The Machine",o:"Ben E. King",uri:"spotify:track:5XSU59wtE5CRCAEyHmmGy4"},
+  {t:"Heroes",c:"Peter Gabriel",o:"David Bowie",uri:"spotify:track:2Os83Fjr9ixsIRLMiaGCnj"},
+  {t:"All Apologies",c:"Sinéad O'Connor",o:"Nirvana",uri:"spotify:track:1SquBBWJ2qIUAt6GiKZpsq"},
+  {t:"I Just Called to Say I Love You",c:"John Prine / The Secret Sisters",o:"Stevie Wonder",uri:"spotify:track:605rBHHOx8pF5kCEC2RDag"},
+  {t:"Addicted To Love",c:"Florence + The Machine",o:"Robert Palmer",uri:"spotify:track:3fNuoybebaufvtFBo5TDWO"},
+  {t:"King of Pain",c:"Alanis Morissette",o:"The Police",uri:"spotify:track:1oVnIYWKugITYu99VMguwr"},
+  {t:"I Want To Know What Love Is",c:"Clay Aiken / Suzie McNeil",o:"Foreigner",uri:"spotify:track:7aFxVYEvzdGNMi5mFbbJB2"},
+  {t:"Knockin' On Heaven's Door",c:"Guns N' Roses",o:"Bob Dylan",uri:"spotify:track:4JiEyzf0Md7KEFFGWDDdCr"},
+  {t:"Candle In The Wind",c:"Ed Sheeran",o:"Elton John",uri:"spotify:track:73TXMz1i41sGfOuDg8gH4L"},
+  {t:"Golden Slumbers",c:"Dua Lipa",o:"The Beatles",uri:"spotify:track:1cqXa5zVzhrrIm7QyQD1as"},
+  {t:"Don't You Want Me",c:"Bahamas / The Weather Station",o:"The Human League",uri:"spotify:track:6gREYnl1rgTBE06YIDZheT"},
+  {t:"Fortunate Son",c:"Cat Power",o:"Creedence Clearwater Revival",uri:"spotify:track:1YK3xueKx2pbrFz72Y45u6"},
+  {t:"Personal Jesus",c:"Johnny Cash",o:"Depeche Mode",uri:"spotify:track:0oMI7r4qbvmzEaM00kml8C"},
+  {t:"Easy",c:"Faith No More",o:"Commodores",uri:"spotify:track:1FVcSVHgSiNHwiOh4wLawP"},
+  {t:"Hallelujah",c:"Jeff Buckley",o:"Leonard Cohen",uri:"spotify:track:5qv0ohJV2QNwga79jLNDYQ"},
+  {t:"Immigrant Song",c:"Trent Reznor / Karen O",o:"Led Zeppelin",uri:"spotify:track:3g5kQgKEllNBUklsmARGg8"},
+  {t:"Billie Jean",c:"Chris Cornell",o:"Michael Jackson",uri:"spotify:track:5le0k7yvbMCHH2Xa1tEpAL"},
+  {t:"Girl, You'll Be a Woman Soon",c:"Urge Overkill",o:"Neil Diamond",uri:"spotify:track:7xmW8gsZgihBHkjHA3U8l7"},
+  {t:"All Along The Watchtower",c:"Jimi Hendrix",o:"Bob Dylan",uri:"spotify:track:0GuQcX8wTe8bUZ72ZncR7m"},
+  {t:"With a Little Help from My Friends",c:"Joe Cocker",o:"The Beatles",uri:"spotify:track:2vvwBjUBTQWZMIum68CPWx"},
+  {t:"Landslide",c:"The Smashing Pumpkins",o:"Fleetwood Mac",uri:"spotify:track:46jNNisjr8iE3jkNtrtWFl"},
+  {t:"Landslide",c:"The Chicks",o:"Fleetwood Mac",uri:"spotify:track:5hviCr3lgg6LY6noG6DPKs"},
+  {t:"Toxic",c:"Mark Ronson",o:"Britney Spears",uri:"spotify:track:0rJTwWY2IKaEV4TwOoo7Ia"},
+  {t:"Tainted Love",c:"Marilyn Manson",o:"Soft Cell",uri:"spotify:track:1ANc3O9jWyP6B9f4WQkiad"},
+  {t:"Wonderwall",c:"Ryan Adams",o:"Oasis",uri:"spotify:track:2lalKR44160J5XES081W9R"},
+  {t:"Red Red Wine",c:"UB40",o:"Neil Diamond",uri:"spotify:track:4uOKFydzAejjSFqYbv1XPt"},
+  {t:"I Heard It Through The Grapevine",c:"Creedence Clearwater Revival",o:"Marvin Gaye",uri:"spotify:track:02gIQlGYI0KVK87Uo9Ekjj"},
+  {t:"Can't Help Falling in Love",c:"Beck",o:"Elvis",uri:"spotify:track:5b9zmzULkkNBIhntA4cHBx"},
+  {t:"(I Can't Get No) Satisfaction",c:"Cat Power",o:"The Rolling Stones",uri:"spotify:track:4v2laH2faHbBeDumWMLHIZ"},
+  {t:"Sexual Healing",c:"Hot Chip",o:"Marvin Gaye",uri:"spotify:track:4o00TPFh7RiGPoqeJbMEpP"},
+  {t:"Crazy",c:"Kacey Musgraves",o:"Gnarls Barkley",uri:"spotify:track:3cHE6wRhtaV6O7lp4BRnA4"},
+  {t:"Can't You See",c:"Waylon Jennings",o:"The Marshall Tucker Band",uri:"spotify:track:3vGB7pK6KJaspU73i1M30n"},
+  {t:"Girl Crush",c:"Harry Styles",o:"Little Big Town",uri:"spotify:track:4YutJsNwBBInE8vemufpQ8"},
+  {t:"Have You Ever Seen The Rain",c:"The Lumineers",o:"Creedence Clearwater Revival",uri:"spotify:track:1iZdFYJujH9VZtj7c0Xw2y"},
+  {t:"A Pirate Looks At Forty",c:"Jack Johnson / Dave Matthews",o:"Jimmy Buffett",uri:"spotify:track:3P3Rj89T4jl2QczwR3TMRr"},
+  {t:"Love Song",c:"311",o:"The Cure",uri:"spotify:track:3mtukCAgd0mE260QcBfXAX"},
+  {t:"I Will Survive",c:"CAKE",o:"Gloria Gaynor",uri:"spotify:track:0qgiFuYhYuwtFXEwYakddE"},
+  {t:"Imagine",c:"Avril Lavigne",o:"John Lennon",uri:"spotify:track:0VgDSbOTRMgvtUc1bYges8"},
+  {t:"Instant Karma",c:"U2",o:"John Lennon",uri:"spotify:track:0uQ8ai2RWkf6pPS4GSIO73"},
+  {t:"Smooth Criminal",c:"Alien Ant Farm",o:"Michael Jackson",uri:"spotify:track:2T3blUc9Jnui2a0ZhuNOag"},
+  {t:"Hurt",c:"Johnny Cash",o:"Nine Inch Nails",uri:"spotify:track:2pDXMhXlzg67zhXKZVlefy"},
+  {t:"Bad Romance",c:"Thirty Seconds To Mars",o:"Lady Gaga",uri:"spotify:track:6FOkXQQZgwjW2PpHxkTuyv"},
+  {t:"Higher Ground",c:"Red Hot Chili Peppers",o:"Stevie Wonder",uri:"spotify:track:5arVt2Wg0zbiWwAOZef2Nl"},
+  {t:"Live And Let Die",c:"Guns N' Roses",o:"Paul McCartney",uri:"spotify:track:04MNKrAnzrHDUzuXAtNoLr"},
+  {t:"Faith",c:"Limp Bizkit",o:"George Michael",uri:"spotify:track:3R9B4XUKlqZ1Thh7OFD6ck"},
+  {t:"Whole Lotta Love",c:"Santana / Chris Cornell",o:"Led Zeppelin",uri:"spotify:track:0u6lRvvxbrAYEdkUFKmHp6"},
+  {t:"How You Remind Me",c:"Avril Lavigne",o:"Nickelback",uri:"spotify:track:00tB8c71eTcG5jV7PhuF4Q"},
+  {t:"I'm Not the Only One",c:"Dua Lipa",o:"Sam Smith",uri:"spotify:track:7wIYDzWW82O6Rc4vGuzjND"},
+  {t:"Hand In My Pocket",c:"Imagine Dragons",o:"Alanis Morissette",uri:"spotify:track:3P2I45r2nyahA9vZS6SQGT"},
+  {t:"Jolene",c:"The White Stripes",o:"Dolly Parton",uri:"spotify:track:2KWgKzzwFrPPZYkLNJy6qF"},
+  {t:"Tiny Dancer",c:"Florence + The Machine",o:"Elton John",uri:"spotify:track:69sJBJdGogAYV74hmB0ORK"},
+  {t:"If I Ain't Got You",c:"Maroon 5",o:"Alicia Keys",uri:"spotify:track:0SUIDQChUyNkU9JmC1otEw"},
+  {t:"Dream A Little Dream",c:"Eddie Vedder",o:"The Beatles",uri:"spotify:track:12echR1j6gj17Y6t98HdSl"},
+  {t:"California Dreamin'",c:"Sia",o:"The Mamas & The Papas",uri:"spotify:track:2Zw1UciFQWTbyMLSVJjdWX"},
+  {t:"Drive",c:"Aimee Mann",o:"Ella Fitzgerald / Louis Armstrong",uri:"spotify:track:6X7O5GPtUv88dZc8TZsuoX"},
+  {t:"Kiss",c:"Kelly Clarkson",o:"Prince",uri:"spotify:track:7Kfpow0FQwvw3xxrRdXgf9"},
+  {t:"Love On The Brain",c:"Cold War Kids / Bishop Briggs",o:"Rihanna",uri:"spotify:track:7ILFkuRdWNomYgG6QNhtSv"},
+  {t:"Proud Mary",c:"Tina Turner",o:"Creedence Clearwater Revival",uri:"spotify:track:6gJdDnF2TzfA1WPMXuCa3x"},
+  {t:"Dancing On My Own",c:"Elle Fanning",o:"Robyn",uri:"spotify:track:4quXaOhBoHdeHSGnpN5blS"},
+  {t:"Use Somebody",c:"Shawn Mendes",o:"Kings Of Leon",uri:"spotify:track:5My4LtZW8JQJoKFDWodqIt"},
+  {t:"Take My Breath Away",c:"My Morning Jacket",o:"Berlin",uri:"spotify:track:6cLPaqcG392d7zGvK2T4zX"},
+  {t:"I Will Always Love You",c:"Whitney Houston",o:"Dolly Parton",uri:"spotify:track:4eHbdreAnSOrDDsFfc4Fpm"},
+  {t:"Can't Take My Eyes Off of You",c:"Ms. Lauryn Hill",o:"Frankie Valli",uri:"spotify:track:2GFExyKXf9383tSRSrEHEt"},
+  {t:"My Prerogative",c:"Britney Spears",o:"Bobby Brown",uri:"spotify:track:2JxftzENN2rhpXxnOmtQBR"},
+  {t:"New York",c:"Cat Power",o:"Frank Sinatra",uri:"spotify:track:4dksbqpghucfzyXY19ggG3"},
+  {t:"Never Tear Us Apart",c:"The National",o:"INXS",uri:"spotify:track:6ApsMLGIa9zw446CrqxcEi"},
+  {t:"Under Pressure",c:"Karen O / Willie Nelson",o:"David Bowie / Queen",uri:"spotify:track:7rtNxSatiqmLKb4G71k1yn"},
+  {t:"All Together Now",c:"André 3000",o:"The Beatles",uri:"spotify:track:0O84vcg38upuklnJxLFUjD"},
+  {t:"Angel From Montgomery",c:"Susan Tedeschi",o:"John Prine",uri:"spotify:track:5TiuWTxFfIkmKcHJ6f4IjC"},
+  {t:"Never Been to Spain",c:"Waylon Jennings",o:"Three Dog Night",uri:"spotify:track:13OK3ZOupPmDYN0sPTYSae"},
+  {t:"Watching The Wheels",c:"Aloe Blacc",o:"John Lennon",uri:"spotify:track:3WDhgg3WBESB2PZLJ4UcpE"},
+  {t:"I'm On Fire",c:"Chromatics",o:"Bruce Springsteen",uri:"spotify:track:363GylESVIJoHE7MUB4mmp"},
+  {t:"Say My Name",c:"Hozier",o:"Destiny's Child",uri:"spotify:track:2xbuycY0MolcTZGENc4PuK"},
+  {t:"Fix You",c:"Ben Harper / Soweto Gospel Choir",o:"Coldplay",uri:"spotify:track:7wyjYCzCk2SW9AhPgY9tPL"},
+  {t:"The Promise",c:"Sturgill Simpson",o:"When in Rome",uri:"spotify:track:6OV4CbPHRtbqrpJrbEFJfi"},
+  {t:"We Can Work It Out",c:"Stevie Wonder",o:"The Beatles",uri:"spotify:track:41q8ZiB3LZl4HRmmzUTIo4"},
+  {t:"One More Try",c:"LeAnn Rimes",o:"George Michael",uri:"spotify:track:0QeopWycQsDAo0p1sp3OcQ"},
+  {t:"Somewhere Only We Know",c:"Lily Allen",o:"Keane",uri:"spotify:track:7FnHpKPgVC6GE0RRCJNB2T"},
+  {t:"Free Fallin'",c:"John Mayer",o:"Tom Petty",uri:"spotify:track:4LloVtxNZpeh7q7xdi1DQc"},
+  {t:"Rich Girl",c:"Nina Simone",o:"Hall & Oates",uri:"spotify:track:2dIt2CrDGWT96WQLT08bfr"},
+  {t:"Shakedown Street",c:"Poolside",o:"Grateful Dead",uri:"spotify:track:0wPUWUZ0jzqnGddU793xHO"},
+  {t:"I'm Goin' Down",c:"Vampire Weekend",o:"Bruce Springsteen",uri:"spotify:track:4l7aryEsduuO7tQU8ZY46e"},
+  {t:"Zombie",c:"Miley Cyrus",o:"The Cranberries",uri:"spotify:track:0olaaJrCBTMJJvqPdvNpsx"},
+  {t:"Just My Imagination (Running Away With Me)",c:"The Rolling Stones",o:"The Temptations",uri:"spotify:track:7w2s5Wj0LPNhUkVCt8av09"},
+  {t:"I Won't Back Down",c:"Johnny Cash",o:"Tom Petty",uri:"spotify:track:5AmPClBlU5sK45i6kMSngt"},
+  {t:"Pony",c:"Leon Bridges",o:"Ginuwine",uri:"spotify:track:0exKMPo2iind68yWTaHCrr"},
+  {t:"Hold On, We're Going Home",c:"Lykke Li",o:"Drake",uri:"spotify:track:7dnUCIIZgKKIgsKGAB6kxJ"},
+  {t:"Don't Speak",c:"Carly Rae Jepsen",o:"No Doubt",uri:"spotify:track:0gzMEfErGPaCFbQJdb2HQb"},
+  {t:"Doin' Time",c:"Lana Del Rey",o:"Sublime",uri:"spotify:track:0cLS7FslBJgsuWwJNRnPWB"},
+  {t:"That Don't Impress Me Much",c:"HAIM",o:"Shania Twain",uri:"spotify:track:0qfZ778fbXXCtyEzyIET5K"},
+  {t:"Tempted",c:"Erykah Badu / James Poyser",o:"Squeeze",uri:"spotify:track:2I3vHOJZID259O7hNobDT5"},
+  {t:"What's Going On",c:"John Legend",o:"Marvin Gaye",uri:"spotify:track:2hdXm61Sl3ZUEmVdTSWRuU"},
+  {t:"You Are The Sunshine Of My Life",c:"Jack White",o:"Stevie Wonder",uri:"spotify:track:47YGxjuV2tiJbx0qscx9vH"},
+  {t:"Sweet Child O' Mine",c:"Sheryl Crow",o:"Guns N' Roses",uri:"spotify:track:0273i5ysrlovK8rr0KJfQn"},
+  {t:"Beat It",c:"Fall Out Boy / John Mayer",o:"Michael Jackson",uri:"spotify:track:2ds9vlk6o6BRCc2FAkmOvX"},
+  {t:"Across the Universe",c:"Fiona Apple",o:"The Beatles",uri:"spotify:track:6ZQgooEk8PvsLxedYaT6Oa"},
+  {t:"Go Your Own Way",c:"The Cranberries",o:"Fleetwood Mac",uri:"spotify:track:0VuhdSYkAOmhASbt5vnkdO"},
+  {t:"Baby One More Time",c:"Ed Sheeran",o:"Britney Spears",uri:"spotify:track:4mJDfMcT7odIUjWlb2WO4L"},
+  {t:"Midnight Rider",c:"Train",o:"The Allman Brothers Band",uri:"spotify:track:01CoJ5SrLd5V9nm9oD3b1m"},
+  {t:"Do You Really Want To Hurt Me",c:"Violent Femmes",o:"Culture Club",uri:"spotify:track:1VlQdZutH7z81HCIAmjycZ"},
+  {t:"Eleanor Rigby",c:"Aretha Franklin",o:"The Beatles",uri:"spotify:track:4ZLk4DCbXXyydFucsfzIVF"},
+  {t:"Mrs. Robinson",c:"The Lemonheads",o:"Simon & Garfunkel",uri:"spotify:track:5EugXICXL06waHgP4iTI58"},
+  {t:"Jolene",c:"Zac Brown Band",o:"Ray La Montagne",uri:"spotify:track:6xU4ei3n99VRE7Hog5WZJw"},
+  {t:"The Man Who Sold The World",c:"Nirvana",o:"David Bowie",uri:"spotify:track:15VRO9CQwMpbqUYA7e6Hwg"},
+  {t:"Fame",c:"Duran Duran",o:"David Bowie",uri:"spotify:track:2vZslxmYO9b8fyh08A3kqd"},
+  {t:"You're All I've Got Tonight",c:"The Smashing Pumpkins",o:"The Cars",uri:"spotify:track:2U0UC8lMdFyZcUss7X2urS"},
+  {t:"Shake It Off",c:"Ryan Adams",o:"Taylor Swift",uri:"spotify:track:391ijHd2drZtRfz5v0LqLf"},
+  {t:"Come Together",c:"Soundgarden",o:"The Beatles",uri:"spotify:track:5NE4CrEagAGj6zJWJ0V9N7"},
+  {t:"In My Life",c:"Ozzy Osbourne",o:"John Lennon",uri:"spotify:track:5oby5qH2fyOqzw5YYfeHmG"},
+  {t:"Heart Of Glass",c:"Miley Cyrus",o:"Blondie",uri:"spotify:track:5i7ThJfYLAzp2DyZuFpF6j"},
+  {t:"Don't Let The Sun Go Down On Me",c:"Miley Cyrus",o:"Elton John",uri:"spotify:track:03f2Q9Z8eaF8lPfNL6x3x7"},
+  {t:"Take Me to the River",c:"Talking Heads",o:"Al Green",uri:"spotify:track:1auuYcOrua5hrsGCS7idun"},
+  {t:"Space Oddity",c:"Natalie Merchant",o:"David Bowie",uri:"spotify:track:0dBzi0Vapr6MZUsTb47Mx9"},
+  {t:"Take The Money And Run",c:"Run-D.M.C. / Everlast",o:"Steve Miller Band",uri:"spotify:track:1lQcxbMAJvV7qL8llB9DOd"},
+  {t:"Bang A Gong (Get It On)",c:"U2 / Elton John",o:"T. Rex",uri:"spotify:track:53D3QRrXV0vyy2PSXAhuxG"},
+  {t:"American Woman",c:"Lenny Kravitz",o:"The Guess Who",uri:"spotify:track:3X6iIrFuQoCshIWBseEKPl"},
+  {t:"Rolling In The Deep",c:"Greta Van Fleet",o:"Adele",uri:"spotify:track:2VprRdTmbgyjXnDzHIcfNl"},
+  {t:"Smells Like Teen Spirit",c:"Tori Amos",o:"Nirvana",uri:"spotify:track:1kWqRB6PHLM9QTfaXuHpIV"},
+  {t:"Day Tripper",c:"Jimi Hendrix",o:"The Beatles",uri:"spotify:track:3UweOS7TngjWWQsdh9uKfb"},
+  {t:"Fly Like an Eagle",c:"Seal",o:"Steve Miller Band",uri:"spotify:track:4Nwm4lvNRxXkGR6aMmtdKm"},
+  {t:"Wish You Were Here",c:"Cody Jinks",o:"Pink Floyd",uri:"spotify:track:132PonN0vUr9BLDe0DmIYs"},
+  {t:"The First Time Ever I Saw Your Face",c:"James Blake",o:"Roberta Flack",uri:"spotify:track:0iOuOHywtfaQEcWKeyuH3m"},
+  {t:"No Diggity",c:"Chet Faker",o:"Blackstreet",uri:"spotify:track:2xD7RvKFJl52xyds3wQFXQ"},
+  {t:"Respect",c:"Aretha Franklin",o:"Otis Redding",uri:"spotify:track:7s25THrKz86DM225dOYwnr"},
+  {t:"Sweet Jane",c:"Cowboy Junkies",o:"Lou Reed",uri:"spotify:track:71OzN2JM6BoQD3JO9hiJFi"},
+  {t:"Pale Blue Eyes",c:"R.E.M.",o:"The Velvet Underground",uri:"spotify:track:1L52NHf7yOsywtWZW5dBNm"},
+  {t:"Hotel California",c:"Gipsy Kings",o:"Eagles",uri:"spotify:track:4Rvhe8O90hFIExTJkdrRPM"},
+  {t:"California Dreamin'",c:"Bobby Womack",o:"The Mamas & The Papas",uri:"spotify:track:6G7MHIvSDR3ehXPkuDFAlM"},
+  {t:"Heart-Shaped Box",c:"Glass Animals",o:"Nirvana",uri:"spotify:track:2UrSdFSG1rTuzCwAkeP0ou"},
+  {t:"Into the Mystic",c:"Gretchen Wilson",o:"Van Morrison",uri:"spotify:track:0VKt9tsf9gOY3eotIfRHNS"},
+  {t:"The Weight",c:"Aretha Franklin",o:"The Band",uri:"spotify:track:2VdHRWJeGpIY0WJcQD2mYd"},
+  {t:"Running Up That Hill",c:"Chromatics",o:"Kate Bush",uri:"spotify:track:20yPPvSSfIomexVwLdgXSo"},
+  {t:"Nothing Else Matters",c:"My Morning Jacket",o:"Metallica",uri:"spotify:track:2OcZNpbq0s1WGIGrlfKM43"},
+  {t:"Waiting Around to Die",c:"Michael Kiwanuka",o:"Townes Van Zandt",uri:"spotify:track:7cCoEL8adnIGrbmoEiJgy8"},
+  {t:"Smells Like Teen Spirit",c:"Patti Smith",o:"Nirvana",uri:"spotify:track:58cKWhCT3I4yhxtNpBlMli"},
+  {t:"Across the Universe",c:"David Bowie",o:"The Beatles",uri:"spotify:track:5sgcIWodRNC9FQYZ2ih6C9"},
+  {t:"Everybody's Talkin'",c:"Iggy Pop",o:"Harry Nilsson",uri:"spotify:track:7KgiUtiFi1F4cWgdXFBlu2"},
+  {t:"Hard To Handle",c:"The Black Crowes",o:"Otis Redding",uri:"spotify:track:05NYcsjJwOYq4jIiKPVj9p"},
+  {t:"After Midnight",c:"Eric Clapton",o:"JJ Cale",uri:"spotify:track:27mdmXNcO0gNpXlrWi9DPZ"},
+  {t:"Stand By Me",c:"John Lennon",o:"Ben E. King",uri:"spotify:track:3ntrdR24dLkKrzSGRv1FlH"},
+  {t:"Dead Flowers",c:"Townes Van Zandt",o:"The Rolling Stones",uri:"spotify:track:6QLh3oOA1AKocLHFH6j7qA"},
+  {t:"Stay",c:"Cat Power",o:"Rihanna",uri:"spotify:track:2ilo3w0stilJKeQZS61FeN"},
+  {t:"What The World Needs Now",c:"Cat Power",o:"Burt Bacharach",uri:"spotify:track:0x7EvWqUCbSspdAmYocBOs"},
+  {t:"It Ain't Me Babe",c:"Johnny Cash",o:"Bob Dylan",uri:"spotify:track:44Pcg6x09ipUmsQTHZOzxu"},
+  {t:"I Shall Be Released",c:"The Band",o:"Bob Dylan / The Band",uri:"spotify:track:1IoRkyadylakMOukD7uN67"},
+  {t:"Dancing In The Dark",c:"Hot Chip",o:"Bruce Springsteen",uri:"spotify:track:4tyLdUyjtvc2aTzZ2W1PLd"},
+  {t:"Signed, Sealed, Delivered (I'm Yours)",c:"Rufus Wainwright",o:"Stevie Wonder",uri:"spotify:track:46CIlA5RykShruWcP0mOLp"},
+  {t:"Waterfalls",c:"Death Cab for Cutie",o:"TLC",uri:"spotify:track:6p8ZhmQS4fia0j93S2M3Fj"},
+  {t:"Only Wanna Be With You",c:"Post Malone",o:"Hootie & The Blowfish",uri:"spotify:track:3SawmGBjjq8EOYZJV11cJm"},
+  {t:"Dancing in the Moonlight",c:"alt-J",o:"Toploader",uri:"spotify:track:2fpfApt0LZiOWybYfRVXTB"},
+  {t:"Wildflowers",c:"Miley Cyrus",o:"Tom Petty",uri:"spotify:track:4L0rxWhjyX0VhNbK4U9oK6"},
+  {t:"Romeo And Juliet",c:"The Killers",o:"Dire Straits",uri:"spotify:track:1kfrnPViuzKdNwmH21ehLg"},
+  {t:"Breakdown",c:"Grace Jones",o:"Tom Petty",uri:"spotify:track:2jeT39ucq9v0AojVibZb5G"},
+  {t:"Smalltown Boy",c:"Orville Peck",o:"Bronski Beat",uri:"spotify:track:2UyJBtpLTxB5D4M0Apvu7e"},
+  {t:"House of the Rising Sun",c:"The White Buffalo",o:"The Animals",uri:"spotify:track:7iXECdzTvdd9jq8TiMtE6V"},
+  {t:"When Doves Cry",c:"Patti Smith",o:"Prince",uri:"spotify:track:7w0chcuNV2QYryLRRXSuyh"},
+  {t:"People Get Ready",c:"Jeff Beck / Rod Stewart",o:"Curtis Mayfield",uri:"spotify:track:1Qd3CUBmJMBOmapxPYY6pZ"},
+  {t:"Long, Long Time",c:"Jerry Jeff Walker",o:"Linda Ronstadt",uri:"spotify:track:5FQc3Lzfeo7YwGiUyPIJoR"},
+  {t:"Tainted Love",c:"Milky Chance",o:"Soft Cell",uri:"spotify:track:1wAPbQ5XjbZqPl0WDl5mHH"},
+  {t:"Fire",c:"The Pointer Sisters",o:"Bruce Springsteen",uri:"spotify:track:65lHwG8JFJs67PnOUhCYPq"},
+  {t:"Jealous Guy",c:"The Weeknd",o:"John Lennon",uri:"spotify:track:5LffvExhQQFcfwqkGNpFpM"},
+  {t:"Streets of Philadelphia",c:"Waxahatchee",o:"Bruce Springsteen",uri:"spotify:track:6dnCLHX369y7VVewUWRVXJ"},
+  {t:"Hey Ya!",c:"Panic! At The Disco",o:"OutKast",uri:"spotify:track:22qQjtiv3Xy1P8WvpA6HgR"},
+  {t:"If I Fell",c:"Maroon 5",o:"The Beatles",uri:"spotify:track:3lAqHOGFBABytXxiPpDm6e"},
+  {t:"A Hard Day's Night",c:"The Supremes",o:"The Beatles",uri:"spotify:track:5CUrTeAj8XBgFIQvyhYvNs"},
+  {t:"September",c:"Taylor Swift",o:"Earth, Wind & Fire",uri:"spotify:track:5eGX87IiKsGuzS3iw4CfCX"},
+  {t:"Johnny B Goode",c:"The Beatles",o:"Chuck Berry",uri:"spotify:track:4QqUqY4ZcEsXELYQbnSy5u"},
+  {t:"Help!",c:"Oasis",o:"The Beatles",uri:"spotify:track:6PebPuMhnHYrHQakCAmkYL"},
+  {t:"Dancing with Myself",c:"blink-182",o:"Billy Idol",uri:"spotify:track:4y2qF52ShKI6w3pxnwt3wl"},
+  {t:"Something",c:"Norah Jones",o:"George Harrison",uri:"spotify:track:2jYsAnjf4aDrOK75xk7MYn"},
+  {t:"Like a Virgin",c:"Motley Crue",o:"Madonna",uri:"spotify:track:55tH1vUqhMrLlcJ09k2QGq"},
+  {t:"I Get Around",c:"Red Hot Chili Peppers",o:"The Beach Boys",uri:"spotify:track:06JprR8etx1u9C9k55lT1x"},
+  {t:"Tonight, Tonight",c:"Passion Pit",o:"The Smashing Pumpkins",uri:"spotify:track:6F3Zu1SBa0duBomvXmWUCo"},
+  {t:"just like heaven",c:"The Lumineers",o:"The Cure",uri:"spotify:track:11xjDJ7i9BLd1AYMedwJQK"},
+  {t:"Just Breathe",c:"Willie Nelson / Lukas Nelson",o:"Eddie Vedder / Pearl Jam",uri:"spotify:track:3rIgqH7rTzpB7Gtvo6oDsA"},
+  {t:"Turn The Page",c:"Metallica",o:"Bob Seger",uri:"spotify:track:7HPhrbgMHV5cUskknWA2oo"},
+  {t:"Born This Way",c:"Orville Peck",o:"Lady Gaga",uri:"spotify:track:7KaCtOjnF9W1qztV4Kv3nj"},
+  {t:"Africa",c:"Weezer",o:"Toto",uri:"spotify:track:36Pim2ANczp82lCWIb8GHy"},
+  {t:"Bohemian Rhapsody",c:"Panic! At The Disco",o:"Queen",uri:"spotify:track:2YSbHu9XF4bNYWt3MnIhgE"},
+  {t:"Unchained Melody",c:"Norah Jones",o:"Righteous Brothers",uri:"spotify:track:6MSR1feoxyvndpYL8ukq4g"},
+  {t:"Big Yellow Taxi",c:"Counting Crows / Vanessa Carlton",o:"Joni Mitchell",uri:"spotify:track:0KTfZWEWivacSuZSjUe7JS"},
+  {t:"The Boxer",c:"Mumford & Sons",o:"Paul Simon",uri:"spotify:track:7844FJ9yD5mdJSwbJaKT6n"},
+  {t:"Come Together",c:"Michael Jackson",o:"The Beatles",uri:"spotify:track:1eGYirwbCEhehpvytx7BRd"},
+  {t:"I Wanna Dance With Somebody (Who Loves Me)",c:"Fall Out Boy",o:"Whitney Houston",uri:"spotify:track:3Nca5js9xKegX655YZ43Uq"},
+  {t:"Kung Fu Fighting",c:"CeeLo Green",o:"Carl Douglas",uri:"spotify:track:0INtjcLMDnXjNB2YGe6RBT"},
+  {t:"Message In a Bottle",c:"John Mayer",o:"The Police",uri:"spotify:track:1UsarbwGD3O7mXy7G8Qj9x"},
+  {t:"Sex And Candy",c:"Maroon 5",o:"Marcy Playground",uri:"spotify:track:3TXawfi6N6DFjJQ6jNFg8m"},
+  {t:"Signed Sealed Delivered",c:"Elton John",o:"Stevie Wonder",uri:"spotify:track:2FH9G4k5xjgV9h9P1qkPQZ"},
+  {t:"Word Up!",c:"Korn",o:"Cameo",uri:"spotify:track:4eRfCcicjpjoCaYWylRU7m"},
+  {t:"Saturday Night's Alright (For Fighting)",c:"Nickelback",o:"Elton John",uri:"spotify:track:5tHoSyAlYoNjurlgDF3wbQ"},
+  {t:"(Everything I Do) I Do It for You",c:"Brandy",o:"Bryan Adams",uri:"spotify:track:5GVyxBx7OX5RtkYSUTx9p2"},
+  {t:"No One",c:"Cold War Kids",o:"Alicia Keys",uri:"spotify:track:2slPSwOa6A605bhQkrcSdi"},
+  {t:"Use Your Love",c:"Katy Perry",o:"The Outfield",uri:"spotify:track:3GFLdiYwnXO5xGuiQ3OUce"},
+  {t:"Champagne Supernova",c:"OneRepublic",o:"Oasis",uri:"spotify:track:3RIYWuMEasEhXVNx722ZOC"},
+  {t:"Drops Of Jupiter",c:"Taylor Swift",o:"Train",uri:"spotify:track:0BSmbCIY36iw04azzJ3S0S"},
+  {t:"Strawberry Fields Forever",c:"Ben Harper",o:"The Beatles",uri:"spotify:track:7AQZRacVM7ERPl6hKZb70a"},
+  {t:"Roxanne",c:"George Michael",o:"The Police",uri:"spotify:track:63rKiGqcfNsMU4kAqmm4uY"},
+  {t:"I Heard It Through the Grapevine",c:"Ella Fitzgerald",o:"Marvin Gaye",uri:"spotify:track:5cF6pnGNKYIq9PqhO46JYF"},
+  {t:"Respect",c:"Kelly Clarkson",o:"Otis Redding",uri:"spotify:track:1MsJ1ZOL5bcnPyL0rPhY4L"},
+  {t:"Proud Mary",c:"Ike & Tina Turner",o:"Creedence Clearwater Revival",uri:"spotify:track:5YI7v4VBa23fbEt9wuUmkg"},
+  {t:"Have You Ever Seen the Rain",c:"Johnny Cash",o:"Creedence Clearwater Revival",uri:"spotify:track:2YQxytI5Kba6Uo3z0NgFlp"},
+  {t:"Down On The Corner",c:"Bryan Adams",o:"Creedence Clearwater Revival",uri:"spotify:track:7wVtH8VjUi5xzrzUOHtlZO"},
+  {t:"Travelin' Band",c:"Elton John",o:"Creedence Clearwater Revival",uri:"spotify:track:1CCvaHikp11fBVjXa8AlEY"},
+  {t:"Mr. Tambourine Man",c:"Stevie Wonder",o:"Bob Dylan",uri:"spotify:track:2DuHY4meaFz04Qs2UXfKir"},
+  {t:"Let's Go Crazy",c:"Incubus",o:"Prince",uri:"spotify:track:1mRyq8mXYPasjh8tDXOa8F"},
+  {t:"We Will Rock You",c:"Nickelback",o:"Queen",uri:"spotify:track:39lsDpIy3xdHndtg1bON4B"},
+  {t:"Wicked Game",c:"Celine Dion / Chris Isaak",o:"Chris Isaak",uri:"spotify:track:7rSSVVqC2sqDhmt1LfWm3J"},
+  {t:"Mood Indigo",c:"Frank Sinatra",o:"Duke Ellington",uri:"spotify:track:2LuKtTtotMk41MxesmjCdR"},
+  {t:"Unknown Legend",c:"Shovels & Rope / Shakey Graves",o:"Neil Young",uri:"spotify:track:6INaSJ4clfZ8pvXSGZQnJ7"},
+  {t:"If Not for You",c:"George Harrison",o:"Bob Dylan",uri:"spotify:track:04meQOdHsGUMmlgLHmq0Is"},
+  {t:"Hallelujah",c:"Rufus Wainwright",o:"Leonard Cohen",uri:"spotify:track:6JUALLwHnidbO4eM09ArIh"},
+  {t:"Fix You",c:"Kacey Musgraves",o:"Coldplay",uri:"spotify:track:0vzv4fNNHbkVCTVGQwxxGw"},
+  {t:"I Can't Make U Love Me",c:"Prince",o:"George Michael",uri:"spotify:track:1McFO5OQdbM4RX4aHT0evy"},
+  {t:"Fast Car",c:"Luke Combs",o:"Tracy Chapman",uri:"spotify:track:1Lo0QY9cvc8sUB2vnIOxDT"},
+  {t:"JOLENE",c:"Beyonce",o:"Dolly Parton",uri:"spotify:track:2PmMh2t7jAtN6cqFooA0Xy"},
+  {t:"The First Cut Is the Deepest",c:"Rod Stewart",o:"Cat Stevens",uri:"spotify:track:3FeYjbIVqvAhuTcwsE6K3v"},
+  {t:"The First Cut Is The Deepest",c:"Sheryl Crow",o:"Cat Stevens",uri:"spotify:track:7gN24J8E0pR3G2nsbhkcjw"},
+  {t:"Save It For Later",c:"Eddie Vedder",o:"The English Beat",uri:"spotify:track:2rs6UMzlu1pMGGVw60tiHm"},
+  {t:"I Think We're Alone Now",c:"Billie Joe Armstrong / Green Day",o:"Tommy James & The Shondells",uri:"spotify:track:6h8QlZzBBnZhF4EkGi8JPr"},
+  {t:"I Was Made For Lovin' You",c:"YUNGBLUD",o:"Kiss",uri:"spotify:track:55ikcenXPbQdzCnO1sOuYg"},
+  {t:"Redemption Song",c:"Johnny Cash / Joe Strummer",o:"Bob Marley",uri:"spotify:track:6ArficY3dtVMWYkyTYkAJP"},
+  {t:"Angel",c:"Shaggy / Rayvon",o:"Steve Miller",uri:"spotify:track:7FDV5ELOJHCGLe52AnttEd"},
+  {t:"Behind Blue Eyes",c:"Limp Bizkit",o:"The Who",uri:"spotify:track:1MTQHCpraD4S8g5PAFKzoj"},
+  {t:"The Sound of Silence",c:"Disturbed",o:"Simon & Garfunkel",uri:"spotify:track:1Cj2vqUwlJVG27gJrun92y"},
+  {t:"Many Rivers To Cross",c:"Joe Cocker",o:"Jimmy Cliff",uri:"spotify:track:6MQuAYJgRwUn44gCdOcFIm"},
+  {t:"Waitin' Round to Die",c:"Whitey Morgan and the 78s",o:"Townes Van Zandt",uri:"spotify:track:0V25R2BtymvTb5oJCleXqs"},
+  {t:"Dancing in the Moonlight",c:"Toploader",o:"King Harvest",uri:"spotify:track:3Fzlg5r1IjhLk2qRw667od"},
+  {t:"I Got You Babe",c:"UB40 / Chrissie Hynde",o:"Sonny & Cher",uri:"spotify:track:07itbZUgkAmBi4CEH5NniJ"},
+  {t:"I Got You Babe",c:"Etta James",o:"Sonny & Cher",uri:"spotify:track:228jEjW3dgYStlF1JrZfdq"},
+  {t:"I Got You Babe",c:"Bahamas",o:"Sonny & Cher",uri:"spotify:track:1to9REkgyVv6BX7fyWgEUj"},
+  {t:"Everybody Hurts",c:"Joe Cocker",o:"R.E.M.",uri:"spotify:track:3EyYwX9RuQIX10vUBYPGHv"},
+  {t:"Suzanne",c:"Nina Simone",o:"Leonard Cohen",uri:"spotify:track:1rsTANyQavJLIiPIFUgoiM"},
+  {t:"Higher Love",c:"Kygo / Whitney Houston",o:"Steve Winwood",uri:"spotify:track:6oJ6le65B3SEqPwMRNXWjY"},
+  {t:"Fever",c:"The Cramps",o:"Peggy Lee",uri:"spotify:track:7yh5TWp0LMOjFp5qrH8ygL"},
+  {t:"Light My Fire",c:"Jose Feliciano",o:"The Doors",uri:"spotify:track:1348ERWpfnXaKiMQSMjBu1"},
+  {t:"Atlantic City",c:"The Band",o:"Bruce Springsteen",uri:"spotify:track:4JwjzS9WFkWlpzGCwh82fn"},
+  {t:"Love Is Blindness",c:"Jack White",o:"U2",uri:"spotify:track:1kBM7AURqQTIXFePNVpEwP"},
+  {t:"A Change Is Gonna Come",c:"Greta Van Fleet",o:"Sam Cooke",uri:"spotify:track:2N5v6m1FXvivCjLOPcuSJh"},
+  {t:"The Chain",c:"Jose Feliciano",o:"Fleetwood Mac",uri:"spotify:track:17JfRQAuG7VwfnqPlGxOZw"},
+  {t:"A Change Is Gonna Come",c:"The Neville Brothers",o:"Sam Cooke",uri:"spotify:track:1Aw8AzGtFssawCsiCxxyAr"},
+  {t:"Harvest Moon",c:"Lord Huron",o:"Neil Young",uri:"spotify:track:6gdCb962lq0Xdg7ypVLuLt"},
+  {t:"What's Going On",c:"U2",o:"Marvin Gaye",uri:"spotify:track:2oCvlNPQ3EsLOBo1WkWz0K"},
+  {t:"Dear Prudence",c:"Jerry Garcia",o:"The Beatles",uri:"spotify:track:4Mf9q0eadEnXoijUGqHwPS"},
+  {t:"Bad Company",c:"Bad Company / Charley Crockett",o:"Bad Company",uri:"spotify:track:2eAyPnMrdMLkuYaUQsWl8K"},
+  {t:"No Surprises",c:"Jeremiah Fraites / Gregory Alan Isakov",o:"Radiohead",uri:"spotify:track:0G0f65AP53H6JUGRXrBRln"},
+  {t:"Angel from Montgomery",c:"Bonnie Raitt",o:"John Prine",uri:"spotify:track:6JssQFiBCi6ZcE6060S9A7"},
+  {t:"Nothing Compares 2 U",c:"Sinead O'Connor",o:"Prince",uri:"spotify:track:3nvuPQTw2zuFAVuLsC9IYQ"},
+  {t:"Nothing Else Matters",c:"Chris Stapleton",o:"Metallica",uri:"spotify:track:2diAXaP8GEWHa6ORPctFnh"},
+  {t:"Personal Jesus",c:"Def Leppard",o:"Depeche Mode",uri:"spotify:track:0KXYrQAqpAREiCi4pB5fO9"},
+  {t:"Crazy",c:"Violent Femmes",o:"Gnarls Barkley",uri:"spotify:track:44SByzaGTyuyLKxbV3g3B2"},
+  {t:"I'm On Fire",c:"Shakey Graves",o:"Bruce Springsteen",uri:"spotify:track:1jlJlbsECScG7OdDHQTyyC"},
+  {t:"Dancing In The Dark",c:"Benny Sings",o:"Bruce Springsteen",uri:"spotify:track:6xTB1RZS2BEsXjcMQSeXtu"},
+  {t:"No Diggity",c:"Nick Murphy",o:"Blackstreet",uri:"spotify:track:5MiQly7cdHQiP6JBX1PSYG"},
+  {t:"I'm On Fire",c:"AWOLNATION",o:"Bruce Springsteen",uri:"spotify:track:5mOmBubZnYIy9EgMZFlDlZ"},
+  {t:"Please Mister Postman",c:"The Beatles",o:"The Carpenters",uri:"spotify:track:6wfK1R6FoLpmUA9lk5ll4T"},
+  {t:"Two of Us",c:"Aimee Mann",o:"The Beatles",uri:"spotify:track:3hduloI1MwLBPm8DqOG4Xb"},
+  {t:"Stay With Me",c:"The Temptations",o:"Sam Smith",uri:"spotify:track:6RBchxNA94qTIJQCJ9G6et"},
+  {t:"Spirit In The Sky",c:"Elton John",o:"Norman Greenbaum",uri:"spotify:track:4Ju1TTtFRz8y6dvo8it65k"},
+  {t:"(I Can't Help) Falling In Love With You",c:"UB40",o:"Neil Diamond",uri:"spotify:track:7ojJ4XvqBhBcteM0zjMebT"},
+  {t:"Blackbird",c:"Sarah McLachlan",o:"The Beatles",uri:"spotify:track:7ol4EBFZnZoxHAuUdJ6FRp"},
+  {t:"Take Me Home, Country Roads",c:"Lana Del Rey",o:"John Denver",uri:"spotify:track:7qF0FfuzBFwMe1lNHkEDxW"},
+  {t:"In My Life",c:"Johnny Cash",o:"John Lennon",uri:"spotify:track:7Dprt8s1FohodJYtCNcM4a"},
+  {t:"Fresh Prince of Bel-Air",c:"Neil Young",o:"Will Smith",uri:"spotify:track:2xKTTp7bTGc8pB5HCEw8rx"},
+  {t:"I Think We're Alone Now",c:"Tiffany",o:"Tommy James & The Shondells",uri:"spotify:track:4uvjOKsp7mSjrDhWdkLPBY"}
+];
+
+// ── STATE ──
+let token=null,playlists=[],selectedPl=null;
+let tracks=[],idx=0;
+// ── TEAM STATE ──
+let teamCount=2;
+let teamNames=[];   // ['Team A','Team B',...]
+let teamScores=[];  // [0,0,...]
+let teamStats=[];   // [{titles,covers,originals,skips,songs,points,rounds},...]
+let currentTeamIdx=0;
+let roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
+let playedUris=new Set();
+// Win condition state
+let winTriggeredBy=-1;
+let roundNumber=1;
+let teamsPlayedThisRound=0;
+let activeTeamIndices=[];  // indices of teams still in the game
+let gameOver=false;
+let winPts=25,roundSecs=60,timeLeft=60;
+let timer=null,roundPts=0;
+let chks={title:false,cover:false,original:false};
+let deviceId=null;
+let usingSpotify=false,active=false;
+
+const $=id=>document.getElementById(id);
+function showScreen(id){
+  document.querySelectorAll('.screen,.admin-screen').forEach(s=>s.classList.remove('active'));
+  const el=$('screen-'+id)||$('screen-admin-login');
+  if(id==='admin'){
+    $('screen-admin').classList.add('active');
+  } else if(id==='admin-login'){
+    $('screen-admin-login').classList.add('active');
+  } else {
+    if(el)el.classList.add('active');
+  }
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}}
+function debug(msg){const b=$('debug-box');b.style.display='block';b.innerHTML+=msg+'<br>'}
+function showErr(msg){const b=$('err-banner');b.style.display='block';b.textContent=msg}
+
+// ── AUTH ──
+function rnd(){const a=new Uint8Array(32);crypto.getRandomValues(a);return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')}
+async function challenge(v){const d=new TextEncoder().encode(v),h=await crypto.subtle.digest('SHA-256',d);return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')}
+
+async function loginSpotify(){
+  const v=rnd(),c=await challenge(v);
+  sessionStorage.setItem('pkce_v',v);
+  const redirectUri=window.location.origin+window.location.pathname;
+  debug('Redirect URI: '+redirectUri);
+  const url='https://accounts.spotify.com/authorize?'+new URLSearchParams({
+    client_id:CLIENT_ID,response_type:'code',redirect_uri:redirectUri,
+    scope:'user-read-private playlist-read-private playlist-read-collaborative user-read-playback-state user-modify-playback-state',
+    code_challenge_method:'S256',code_challenge:c
+  });
+  location.href=url;
+}
+
+async function handleCallback(code){
+  const v=sessionStorage.getItem('pkce_v');
+  const redirectUri=window.location.origin+window.location.pathname;
+  debug('Exchanging code, redirect_uri='+redirectUri);
+  if(!v){debug('ERROR: No PKCE verifier in sessionStorage');return false}
+  try{
+    const r=await fetch('https://accounts.spotify.com/api/token',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:CLIENT_ID,code_verifier:v})
+    });
+    const d=await r.json();
+    debug('Token response: '+JSON.stringify(d).substring(0,120));
+    if(d.access_token){token=d.access_token;sessionStorage.removeItem('pkce_v');return true}
+    debug('ERROR: '+JSON.stringify(d));
+    return false;
+  }catch(e){debug('Fetch error: '+e.message);return false}
+}
+
+const UTC_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
+
+async function loadPlaylists(){
+  usingSpotify=true;
+  $('setup-back').onclick=()=>showScreen('login');
+  showScreen('setup');
+  renderTeamInputs();
+}
+
+function startDemo(){
+  usingSpotify=false;selectedPl=null;
+  $('setup-back').onclick=()=>showScreen('login');
+  showScreen('setup');
+  renderTeamInputs();
+}
+
+// ── SPOTIFY CONNECT ──
+// Uses Spotify Connect API — controls whatever device is currently active
+// No SDK needed, no allowlist required
+
+async function initPlayer(){
+  // Always re-fetch device to handle cases where Spotify went idle between rounds
+  try{
+    const r=await fetch('https://api.spotify.com/v1/me/player/devices',{headers:{Authorization:'Bearer '+token}});
+    const d=await r.json();
+    const devices=d.devices||[];
+    if(devices.length===0){
+      setStatus('⚠️ Open Spotify on any device first, then return here.');
+      deviceId=null;return;
+    }
+    const active=devices.find(dv=>dv.is_active)||devices[0];
+    deviceId=active.id;
+    setStatus('🎵 Connected to: '+active.name);
+  }catch(e){setStatus('Could not find Spotify devices: '+e.message);deviceId=null;}
+}
+
+async function playTrack(uri){
+  if(!uri)return;
+  try{
+    const body={uris:[uri]};
+    const target=deviceId?`?device_id=${deviceId}`:'';
+    const r=await fetch(`https://api.spotify.com/v1/me/player/play${target}`,{
+      method:'PUT',
+      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    if(r.status===403){setStatus('⚠️ Spotify Premium required for playback')}
+    else if(r.status===404){setStatus('⚠️ No active Spotify device. Open Spotify first.');deviceId=null;}
+    else{setStatus('')}
+  }catch(e){setStatus('Playback error: '+e.message)}
+}
+
+async function pauseSpotify(){
+  try{
+    await fetch('https://api.spotify.com/v1/me/player/pause',{
+      method:'PUT',
+      headers:{Authorization:'Bearer '+token}
+    });
+  }catch(e){}
+}
+function setStatus(m){$('playback-status').textContent=m}
+
+// ── GAME ──
+async function startGame(){
+  // Collect team names from dynamic inputs
+  teamNames=[];
+  for(let i=0;i<teamCount;i++){
+    const inp=document.getElementById('team-name-'+i);
+    teamNames.push(inp?inp.value.trim()||'Team '+(i+1):'Team '+(i+1));
+  }
+  winPts=parseInt($('win-pts').value)||25;
+  roundSecs=parseInt($('round-secs').value)||60;
+
+  // Init scores and stats
+  teamScores=teamNames.map(()=>0);
+  teamStats=teamNames.map(()=>({titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0}));
+  currentTeamIdx=0;winTriggeredBy=-1;roundNumber=1;teamsPlayedThisRound=0;
+  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
+  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
+  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
+  playedUris=new Set();
+
+  $('hdr-target').textContent=winPts;
+  renderScoreHeader();
+  showScreen('game');
+  setStatus('Finding Spotify device...');
+
+  if(usingSpotify){
+    tracks=[...TRACKS];
+    await initPlayer();
+  } else {
+    tracks=[...DB];
+  }
+
+  shuffle(tracks);idx=0;
+  setStatus('');
+  await beginRound();
+}
+
+function renderScoreHeader(){
+  const wrap=$('score-wrap');
+  if(!wrap)return;
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
+  let html='';
+  teamNames.forEach((name,i)=>{
+    if(i>0)html+=`<div class="vs-lbl">·</div>`;
+    html+=`<div class="score-chip">
+      <div class="sc-lbl">${name}</div>
+      <div class="sc-num" style="color:${colors[i%colors.length]}" id="pts-${i}">${teamScores[i]}</div>
+    </div>`;
+  });
+  wrap.innerHTML=html;
+}
+
+async function beginRound(){
+  roundPts=0;active=true;
+  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
+  // Reset next-turn button visibility
+  const btn=$('next-turn-btn');if(btn)btn.style.display='';
+  if(usingSpotify) await initPlayer();
+  const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
+  const scorekeeperPos=(currentPos+1)%activeTeamIndices.length;
+  const scorekeeperIdx=activeTeamIndices[scorekeeperPos];
+  const bar=$('turn-bar');
+  bar.textContent=`${teamNames[currentTeamIdx]}'s Turn — Scorekeeper: ${teamNames[scorekeeperIdx]}`;
+  bar.className='turn-bar'+(currentTeamIdx%2===0?'':' b');
+  teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i]});
+  loadSong();startTimer();
+}
+
+function lookupOriginal(name,coverArtist){
+  const match=DB.find(s=>s.t.toLowerCase()===name.toLowerCase()&&coverArtist.toLowerCase().includes(s.c.split('/')[0].trim().toLowerCase()));
+  return match?.o||'(original artist)';
+}
+
+function loadSong(){
+  // Skip already-played songs
+  while(idx<tracks.length && playedUris.has(tracks[idx].uri||tracks[idx].t)){idx++}
+  if(idx>=tracks.length){endRound();return}
+  const song=tracks[idx];
+  playedUris.add(song.uri||song.t);
+  // All tracks are from embedded TRACKS array with t/c/o/uri fields
+  const title=song.t||song.name||'';
+  const cover=song.c||(song.artists?.map(a=>a.name).join(', '))||'';
+  const original=song.o||'';
+  const uri=song.uri||null;
+  $('s-name').textContent=title;
+  $('s-by').textContent='by '+cover;
+  $('s-art').src='';$('s-art').style.display='none';
+  $('ans-title').textContent=title;
+  $('ans-cover').textContent=cover;
+  $('ans-original').textContent=original;
+  chks={title:false,cover:false,original:false};
+  ['title','cover','original'].forEach(k=>$('chk-'+k).className='chk');
+  if(uri&&active)playTrack(uri);
+}
+
+function toggle(k){chks[k]=!chks[k];$('chk-'+k).className='chk'+(chks[k]?' on':'')}
+
+function nextSong(){
+  const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
+  const pts=t+cv+o;
+  roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
+  roundStats.points+=pts;roundStats.songs++;
+  teamStats[currentTeamIdx].titles+=t;teamStats[currentTeamIdx].covers+=cv;
+  teamStats[currentTeamIdx].originals+=o;teamStats[currentTeamIdx].points+=pts;
+  teamStats[currentTeamIdx].songs++;
+  roundPts+=pts;teamScores[currentTeamIdx]+=pts;
+  const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
+  // Check win trigger (but don't end yet — let all teams finish the round)
+  if(teamScores[currentTeamIdx]>=winPts && winTriggeredBy===-1){
+    winTriggeredBy=currentTeamIdx;roundsThisCycle=0;
+  }
+  idx++;
+  loadSong();
+}
+function skipSong(){
+  roundStats.skips++;teamStats[currentTeamIdx].skips++;
+  idx++;if(idx>=tracks.length){endRound();return}loadSong();
+}
+
+function startTimer(){
+  timeLeft=roundSecs;drawTimer();
+  timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
+}
+function stopTimer(){clearInterval(timer);timer=null}
+function drawTimer(){
+  $('t-num').textContent=timeLeft;
+  const C=2*Math.PI*39;
+  $('r-fill').style.strokeDashoffset=C*(1-timeLeft/roundSecs);
+  $('r-fill').className='r-fill'+(timeLeft<=10?' urgent':'');
+}
+
+function endRound(){
+  stopTimer();active=false;pauseSpotify();
+  teamStats[currentTeamIdx].rounds++;
+  $('re-title').textContent=`${teamNames[currentTeamIdx]}'s Round!`;
+  $('re-pts').textContent=roundPts;
+  // Round breakdown
+  const rs=roundStats;
+  const pct=(n,d)=>d>0?Math.round(n/d*100)+'%':'—';
+  $('re-summary').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.75rem">
+      <div style="background:var(--vinyl);border-radius:8px;padding:.5rem .6rem;text-align:center">
+        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Titles</div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--cream)">${rs.titles}</div>
+        <div style="font-size:.65rem;color:var(--muted)">${pct(rs.titles,rs.songs)}</div>
+      </div>
+      <div style="background:var(--vinyl);border-radius:8px;padding:.5rem .6rem;text-align:center">
+        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Covers</div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--cream)">${rs.covers}</div>
+        <div style="font-size:.65rem;color:var(--muted)">${pct(rs.covers,rs.songs)}</div>
+      </div>
+      <div style="background:var(--vinyl);border-radius:8px;padding:.5rem .6rem;text-align:center">
+        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Originals</div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--cream)">${rs.originals}</div>
+        <div style="font-size:.65rem;color:var(--muted)">${pct(rs.originals,rs.songs)}</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted);padding:.25rem 0">
+      <span>Songs played: <strong style="color:var(--cream)">${rs.songs}</strong></span>
+      <span>Skipped: <strong style="color:var(--cream)">${rs.skips}</strong></span>
+    </div>`;
+  const maxScore=Math.max(...teamScores);
+  let boardHtml='';
+  teamNames.forEach((name,i)=>{
+    const lead=teamScores[i]===maxScore;
+    boardHtml+=`<div class="sb-row"><span class="sb-team">${name}</span><span class="sb-pts${lead?' lead':''}">${teamScores[i]}</span></div>`;
+  });
+  $('re-board').innerHTML=boardHtml;
+
+  // Determine what happens after this turn
+  const isRoundEnd=(teamsPlayedThisRound+1)>=activeTeamIndices.length;
+  const btn=$('next-turn-btn');
+
+  if(isRoundEnd && winTriggeredBy!==-1){
+    // Round is complete AND win was triggered — check outcomes
+    const winScore=teamScores[winTriggeredBy];
+    const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==winTriggeredBy).map(i=>teamScores[i]));
+
+    if(winScore-maxOther>=3){
+      // Clear winner — hide next button, show winner message
+      if(btn){btn.style.display='none';}
+      $('re-summary').innerHTML+='<div style="margin-top:.75rem;padding:.6rem 1rem;background:#1a2e1a;border:1.5px solid var(--green);border-radius:10px;font-size:.88rem;color:var(--cream)">Game over! Tap <strong>View Stats</strong> to see results.</div>';
+      // Auto-advance to winner screen after a moment
+      setTimeout(()=>showWinner(), 1500);
+    } else {
+      // Check eliminations
+      const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
+      const toEliminate=activeTeamIndices.filter(i=>topScore-teamScores[i]>3);
+      if(toEliminate.length>0 && toEliminate.length<activeTeamIndices.length){
+        // Eliminations pending — hide next button, auto-advance to elimination screen
+        if(btn){btn.style.display='none';}
+        $('re-summary').innerHTML+='<div style="margin-top:.75rem;padding:.6rem 1rem;background:#2a1010;border:1.5px solid #c0392b;border-radius:10px;font-size:.88rem;color:var(--cream)">Some teams have been eliminated! See next screen.</div>';
+        setTimeout(()=>{
+          activeTeamIndices=activeTeamIndices.filter(i=>!toEliminate.includes(i));
+          winTriggeredBy=-1;
+          if(activeTeamIndices.length===1){showWinner();return;}
+          roundNumber++;teamsPlayedThisRound=0;
+          showEliminationScreen(toEliminate);
+        }, 1500);
+      } else {
+        // No eliminations yet — keep playing
+        winTriggeredBy=-1;
+        const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
+        const nextIdx=activeTeamIndices[(currentPos+1)%activeTeamIndices.length];
+        if(btn){btn.textContent='Start Round '+(roundNumber+1)+' ►';btn.style.display='';}
+      }
+    }
+  } else if(isRoundEnd){
+    // Normal round end — no win triggered
+    const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
+    const nextIdx=activeTeamIndices[(currentPos+1)%activeTeamIndices.length];
+    if(btn){btn.textContent='Start Round '+(roundNumber+1)+' ►';btn.style.display='';}
+  } else {
+    // Mid-round — show next team's name
+    const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
+    const nextIdx=activeTeamIndices[(currentPos+1)%activeTeamIndices.length];
+    if(btn){btn.textContent=teamNames[nextIdx]+"'s Turn ►";btn.style.display='';}
+  }
+
+  showScreen('roundend');
+}
+async function nextTurn(){
+  teamsPlayedThisRound++;
+  const roundComplete=teamsPlayedThisRound>=activeTeamIndices.length;
+  if(roundComplete){roundNumber++;teamsPlayedThisRound=0;}
+
+  // Advance to next ACTIVE team
+  const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
+  const nextPos=(currentPos+1)%activeTeamIndices.length;
+  currentTeamIdx=activeTeamIndices[nextPos];
+  showScreen('game');await beginRound();
+}
+function showEliminationScreen(eliminatedIndices){
+  const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
+  const eliminatedNames=eliminatedIndices.map(i=>teamNames[i]+' ('+teamScores[i]+' pts)').join(', ');
+  const remainingNames=activeTeamIndices.map(i=>teamNames[i]+': '+teamScores[i]+' pts').join(', ');
+
+  $('elim-message').textContent='The lead is too great - some teams have been eliminated!';
+  $('elim-eliminated').style.display='block';
+  $('elim-eliminated-names').textContent=eliminatedNames;
+  $('elim-remaining-names').innerHTML=activeTeamIndices.map(i=>
+    `<span style="display:block">${teamNames[i]}: <strong style="color:var(--gold)">${teamScores[i]} pts</strong></span>`
+  ).join('');
+  $('elim-round-num').textContent=roundNumber;
+  showScreen('elimination');
+}
+
+async function continueAfterElimination(){
+  currentTeamIdx=activeTeamIndices[0];
+  showScreen('game');await beginRound();
+}
+
+function showWinner(){
+  gameOver=true;
+  let winIdx=0;
+  teamScores.forEach((s,i)=>{if(s>teamScores[winIdx])winIdx=i});
+  $('w-name').textContent=teamNames[winIdx];
+  $('w-score').textContent=teamNames.map((n,i)=>teamScores[i]).join(' – ');
+  showScreen('winner');
+}
+async function playAgain(){
+  teamScores=teamNames.map(()=>0);
+  teamStats=teamNames.map(()=>({titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0}));
+  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
+  currentTeamIdx=0;winTriggeredBy=-1;roundNumber=1;teamsPlayedThisRound=0;
+  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
+  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
+  playedUris=new Set();shuffle(tracks);idx=0;
+  renderScoreHeader();showScreen('game');await beginRound();
+}
+
+// ── STATS ──
+let statsContext='roundend'; // 'roundend' or 'winner'
+function viewStats(ctx){statsContext=ctx||'roundend';showScreen('stats');renderStats()}
+
+function renderStats(){
+  const el=$('stats-content');
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
+  let html='';
+
+  // Scores banner
+  const maxScore=Math.max(...teamScores);
+  const scoreChips=teamNames.map((n,i)=>`
+    <div style="text-align:center">
+      <div style="font-size:.72rem;color:var(--muted)">${n}</div>
+      <div style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:${colors[i%colors.length]}">${teamScores[i]}</div>
+    </div>`).join('<div style="font-family:Playfair Display,serif;font-size:1.2rem;color:var(--muted);align-self:center">·</div>');
+  html+=`<div class="stats-team-card" style="text-align:center">
+    <div class="stats-section-label">Scoreboard</div>
+    <div style="display:flex;justify-content:center;align-items:center;gap:.75rem;margin-top:.5rem;flex-wrap:wrap">${scoreChips}</div>
+  </div>`;
+
+  // Per-team breakdowns
+  teamNames.forEach((name,i)=>{
+    const s=teamStats[i];
+    const songsAttempted=s.songs||1;
+    const pct=n=>Math.round(n/songsAttempted*100)+'%';
+    html+=`<div class="stats-team-card">
+      <div class="stats-team-name" style="color:${colors[i%colors.length]}">${name}</div>
+      <div class="stats-grid">
+        <div class="stat-cell"><div class="stat-label">Total Points</div><div class="stat-value gold">${s.points}</div></div>
+        <div class="stat-cell"><div class="stat-label">Songs Played</div><div class="stat-value">${s.songs}</div></div>
+        <div class="stat-cell"><div class="stat-label">Song Titles</div><div class="stat-value">${s.titles}</div><div class="stat-pct">${pct(s.titles)}</div></div>
+        <div class="stat-cell"><div class="stat-label">Cover Artists</div><div class="stat-value">${s.covers}</div><div class="stat-pct">${pct(s.covers)}</div></div>
+        <div class="stat-cell"><div class="stat-label">Original Artists</div><div class="stat-value">${s.originals}</div><div class="stat-pct">${pct(s.originals)}</div></div>
+        <div class="stat-cell"><div class="stat-label">Skips</div><div class="stat-value">${s.skips}</div></div>
+      </div>
+      <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid #333">
+        <div class="stats-total-row"><span>Rounds played</span><span>${s.rounds}</span></div>
+        <div class="stats-total-row"><span>Avg pts per song</span><span>${s.songs>0?(s.points/s.songs).toFixed(1):0}</span></div>
+        <div class="stats-total-row"><span>Best category</span><span>${bestCat(s)}</span></div>
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML=html;
+
+  // Footer buttons based on where we came from
+  const footer=$('stats-footer');
+  if(statsContext==='roundend' && !gameOver){
+    const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
+    const nextI=activeTeamIndices[(currentPos+1)%activeTeamIndices.length];
+    const isRoundDone=(teamsPlayedThisRound+1)>=activeTeamIndices.length;
+    const btnLabel=isRoundDone?'Start Round '+(roundNumber+1)+' ►':teamNames[nextI]+"'s Turn ►";
+    footer.innerHTML=`
+      <button class="continue-btn" onclick="nextTurn()">${btnLabel}</button>
+      <button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px" onclick="confirmStop()">&#9632; End Game</button>`;
+  } else if(statsContext==='roundend' && gameOver){
+    footer.innerHTML=`
+      <button class="continue-btn" onclick="playAgain()">Play Again &#9654;</button>
+      <button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px" onclick="showScreen('login')">Back to Home</button>`;
+  } else {
+    footer.innerHTML=`
+      <button class="continue-btn" onclick="playAgain()">Play Again &#9654;</button>
+      <button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px" onclick="showScreen('login')">Back to Home</button>`;
+  }
+}
+
+function bestCat(s){
+  const cats={Titles:s.titles,'Cover Artists':s.covers,'Original Artists':s.originals};
+  return Object.entries(cats).sort((a,b)=>b[1]-a[1])[0][0];
+}
+
+// ── PAUSE / STOP ──
+let paused=false;
+
+function togglePause(){
+  paused=!paused;
+  const btn=$('pause-btn');
+  if(paused){
+    clearInterval(timer);timer=null;
+    pauseSpotify();
+    btn.textContent='▶ Resume';
+    btn.classList.add('paused');
+  } else {
+    // Resume timer
+    timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
+    // Resume playback from where it was paused (no body = resume, not restart)
+    fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
+      method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
+    }).catch(()=>{});
+    btn.textContent='❚❚ Pause';
+    btn.classList.remove('paused');
+  }
+}
+
+function confirmStop(){
+  if(confirm('Stop the current game and return to the home screen?')){
+    stopTimer();
+    paused=false;
+    pauseSpotify();
+    scores={a:0,b:0};team='a';
+  stats={
+    a:{titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0},
+    b:{titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0}
+  };
+  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
+  playedUris=new Set();idx=0;tracks=[];
+    showScreen('login');
+  }
+}
+
+// ── SETUP HELPERS ──
+function changeTeamCount(delta){
+  teamCount=Math.min(8,Math.max(2,teamCount+delta));
+  $('team-count-display').textContent=teamCount;
+  renderTeamInputs();
+}
+
+function renderTeamInputs(){
+  const container=$('team-names-container');
+  if(!container)return;
+  const defaults=['Team A','Team B','Team C','Team D','Team E','Team F','Team G','Team H'];
+  let html='';
+  for(let i=0;i<teamCount;i++){
+    const prev=document.getElementById('team-name-'+i);
+    const val=prev?prev.value:(defaults[i]||'Team '+(i+1));
+    html+=`<input class="team-name-input" id="team-name-${i}" type="text" placeholder="${defaults[i]||'Team '+(i+1)}" value="${val}" maxlength="20">`;
+  }
+  container.innerHTML=html;
+}
+
+function adjustNum(id,delta){
+  const el=$(id);
+  const disp=$(id+'-display');
+  const min=id==='win-pts'?5:15;
+  const max=id==='win-pts'?200:300;
+  const val=Math.min(max,Math.max(min,(parseInt(el.value)||0)+delta));
+  el.value=val;
+  disp.textContent=val;
+}
+
+// ── GOOGLE SHEETS SYNC ──
+
+async function fetchSheet(){
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A2:E2000?key=${SHEETS_API_KEY}`;
+  const r=await fetch(url);
+  const d=await r.json();
+  if(d.error)throw new Error(d.error.message);
+  return (d.values||[]).map(row=>({
+    uri:row[0]||'',title:row[1]||'',cover:row[2]||'',original:row[3]||'',status:row[4]||'pending'
+  }));
+}
+
+async function loadSongsFromSheet(){
+  try{
+    const rows=await fetchSheet();
+    const approved=rows.filter(r=>r.status==='approved'&&r.uri&&r.original);
+    return approved.map(r=>({t:r.title,c:r.cover,o:r.original,uri:r.uri}));
+  }catch(e){
+    console.warn('Sheet load failed, using built-in songs:',e.message);
+    return null; // fall back to TRACKS
+  }
+}
+
+async function writeToSheet(rowData){
+  // Append a row to the sheet via Google Sheets API (write via fetch with token)
+  // We use the Sheets API with the user's OAuth token for writes
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A:E:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS&key=${SHEETS_API_KEY}`;
+  const r=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+    body:JSON.stringify({values:[rowData]})
+  });
+  return r.json();
+}
+
+async function updateSheetRow(rowIndex, values){
+  // rowIndex is 1-based (row 2 = first data row)
+  const range=`Sheet1!A${rowIndex}:E${rowIndex}`;
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueInputOption=RAW&key=${SHEETS_API_KEY}`;
+  const r=await fetch(url,{
+    method:'PUT',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+    body:JSON.stringify({range,majorDimension:'ROWS',values:[values]})
+  });
+  return r.json();
+}
+
+async function deleteSheetRow(rowIndex){
+  // Mark as removed rather than deleting
+  return updateSheetRow(rowIndex,[null,null,null,null,'removed']);
+}
+
+// ── ADMIN ──
+function showAdminLogin(){showScreen('admin-login')}
+
+function checkAdminPw(){
+  const pw=document.getElementById('admin-pw-input').value;
+  if(pw===ADMIN_PASSWORD){
+    document.getElementById('admin-pw-input').value='';
+    document.getElementById('admin-pw-error').style.display='none';
+    showScreen('admin');
+    loadAdminPanel();
+  } else {
+    document.getElementById('admin-pw-error').style.display='block';
+  }
+}
+
+async function loadAdminPanel(){
+  const status=$('admin-status');
+  status.style.display='block';
+  status.textContent='Loading sheet data...';
+  try{
+    const sheetRows=await fetchSheet();
+    status.textContent='Sheet loaded. Fetching Spotify playlist...';
+    const spotifyUris=await fetchSpotifyPlaylistUris();
+    renderAdminPanel(sheetRows,spotifyUris);
+    status.style.display='none';
+  }catch(e){
+    status.textContent='Error: '+e.message;
+  }
+}
+
+async function fetchSpotifyPlaylistUris(){
+  if(!token)return[];
+  let uris=[],url=`https://api.spotify.com/v1/playlists/${SPOTIFY_PLAYLIST_ID}/tracks?limit=100&fields=next,items(track(uri,name,artists))`;
+  while(url){
+    const r=await fetch(url,{headers:{Authorization:'Bearer '+token}});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    (d.items||[]).forEach(i=>{if(i.track&&i.track.uri)uris.push({uri:i.track.uri,name:i.track.name,artist:i.track.artists?.map(a=>a.name).join(', ')})});
+    url=d.next;
+  }
+  return uris;
+}
+
+async function syncPlaylist(){
+  await loadAdminPanel();
+}
+
+function renderAdminPanel(sheetRows, spotifyTracks){
+  const sheetUris=new Set(sheetRows.filter(r=>r.status!=='removed').map(r=>r.uri));
+  const spotifyUriSet=new Set(spotifyTracks.map(t=>t.uri));
+  const spotifyMap=Object.fromEntries(spotifyTracks.map(t=>[t.uri,t]));
+
+  // New songs in Spotify not in Sheet
+  const newSongs=spotifyTracks.filter(t=>!sheetUris.has(t.uri));
+  // Songs in Sheet but removed from Spotify (only non-removed rows)
+  const removedSongs=sheetRows.filter((r,i)=>r.status!=='removed'&&!spotifyUriSet.has(r.uri)).map((r,i)=>({...r,rowIdx:i+2}));
+  // Pending songs (in sheet, status=pending)
+  const pendingSongs=sheetRows.map((r,i)=>({...r,rowIdx:i+2})).filter(r=>r.status==='pending');
+  // Approved songs
+  const approvedSongs=sheetRows.map((r,i)=>({...r,rowIdx:i+2})).filter(r=>r.status==='approved');
+
+  // Render NEW songs
+  const newSection=$('admin-new-songs');
+  const newList=$('admin-new-list');
+  if(newSongs.length>0){
+    newSection.style.display='block';
+    newList.innerHTML=newSongs.map(t=>`
+      <div class="admin-song-row" id="new-${t.uri.replace(/:/g,'_')}">
+        <span class="admin-badge badge-new">NEW</span>
+        <div class="admin-song-info">
+          <div class="admin-song-title">${t.name}</div>
+          <div class="admin-song-artist">${t.artist}</div>
+        </div>
+        <input class="admin-input" placeholder="Original artist..." id="orig-${t.uri.replace(/:/g,'_')}">
+        <button class="admin-action-btn" onclick="approveNewSong('${t.uri}','${escHtml(t.name)}','${escHtml(t.artist)}')">Add</button>
+      </div>`).join('');
+  } else {
+    newSection.style.display='none';
+  }
+
+  // Render REMOVED songs
+  const removedSection=$('admin-removed-songs');
+  const removedList=$('admin-removed-list');
+  if(removedSongs.length>0){
+    removedSection.style.display='block';
+    removedList.innerHTML=removedSongs.map(r=>`
+      <div class="admin-song-row" id="rem-row-${r.rowIdx}">
+        <span class="admin-badge badge-removed">REMOVED</span>
+        <div class="admin-song-info">
+          <div class="admin-song-title">${r.title}</div>
+          <div class="admin-song-artist">${r.cover}</div>
+        </div>
+        <button class="admin-action-btn red" onclick="confirmRemoveSong(${r.rowIdx},'${escHtml(r.uri)}','${escHtml(r.title)}')">Delete</button>
+      </div>`).join('');
+  } else {
+    removedSection.style.display='none';
+  }
+
+  // Render PENDING songs
+  const pendingSection=$('admin-pending-songs');
+  const pendingList=$('admin-pending-list');
+  if(pendingSongs.length>0){
+    pendingSection.style.display='block';
+    pendingList.innerHTML=pendingSongs.map(r=>`
+      <div class="admin-song-row" id="pend-row-${r.rowIdx}">
+        <span class="admin-badge badge-pending">PENDING</span>
+        <div class="admin-song-info">
+          <div class="admin-song-title">${r.title}</div>
+          <div class="admin-song-artist">${r.cover}</div>
+        </div>
+        <input class="admin-input" placeholder="Original artist..." id="pend-orig-${r.rowIdx}" value="${r.original||''}">
+        <button class="admin-action-btn" onclick="approvePendingSong(${r.rowIdx},'${escHtml(r.uri)}','${escHtml(r.title)}','${escHtml(r.cover)}')">Approve</button>
+      </div>`).join('');
+  } else {
+    pendingSection.style.display='none';
+  }
+
+  // Render APPROVED count + list
+  $('admin-approved-count').textContent=approvedSongs.length;
+  $('admin-approved-list').innerHTML=approvedSongs.slice(0,10).map(r=>`
+    <div class="admin-song-row">
+      <span class="admin-badge badge-approved">OK</span>
+      <div class="admin-song-info">
+        <div class="admin-song-title">${r.title}</div>
+        <div class="admin-song-artist">${r.cover} / <em>${r.original}</em></div>
+      </div>
+      <button class="admin-action-btn red" onclick="confirmRemoveSong(${r.rowIdx},'${escHtml(r.uri)}','${escHtml(r.title)}')">Remove</button>
+    </div>`).join('')+(approvedSongs.length>10?`<div style="text-align:center;font-size:.78rem;color:var(--muted);padding:.5rem">...and ${approvedSongs.length-10} more</div>`:'');
+}
+
+function escHtml(s){return (s||'').replace(/'/g,"\'")}
+
+async function approveNewSong(uri, name, artist){
+  const safeUri=uri.replace(/:/g,'_');
+  const origInput=document.getElementById('orig-'+safeUri);
+  const original=(origInput?origInput.value:'').trim();
+  if(!original){alert('Please enter the original artist first.');return;}
+  try{
+    await writeToSheet([uri,name,artist,original,'approved']);
+    const row=document.getElementById('new-'+safeUri);
+    if(row)row.remove();
+    alert('Added: '+name+' by '+artist);
+    // Reload to refresh counts
+    loadAdminPanel();
+  }catch(e){alert('Error saving: '+e.message)}
+}
+
+async function approvePendingSong(rowIdx, uri, title, cover){
+  const origInput=document.getElementById('pend-orig-'+rowIdx);
+  const original=(origInput?origInput.value:'').trim();
+  if(!original){alert('Please enter the original artist first.');return;}
+  try{
+    await updateSheetRow(rowIdx,[uri,title,cover,original,'approved']);
+    document.getElementById('pend-row-'+rowIdx)?.remove();
+    alert('Approved: '+title);
+    loadAdminPanel();
+  }catch(e){alert('Error saving: '+e.message)}
+}
+
+async function confirmRemoveSong(rowIdx, uri, title){
+  if(!confirm('Remove "'+title+'" from the game?'))return;
+  try{
+    await updateSheetRow(rowIdx,[uri,title,'','','removed']);
+    document.getElementById('rem-row-'+rowIdx)?.remove();
+    loadAdminPanel();
+  }catch(e){alert('Error removing: '+e.message)}
+}
+
+// ── INIT ──
+(async()=>{
+  debug('Page URL: '+location.href);
+  debug('Origin: '+location.origin);
+  debug('Redirect URI will be: '+location.origin+location.pathname);
+  const p=new URLSearchParams(location.search);
+  const code=p.get('code'),error=p.get('error');
+  if(error){debug('Spotify returned error: '+error);showErr('Spotify login cancelled or failed.');return}
+  if(code){
+    debug('Got auth code, exchanging...');
+    history.replaceState({},'',location.pathname);
+    const ok=await handleCallback(code);
+    if(ok){debug('Token obtained! Loading playlists...');await loadPlaylists();}
+    else{showErr('Login failed — check debug info above.')}
+  }
+})();
+</script>
+</body>
+</html>
