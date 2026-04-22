@@ -1556,40 +1556,15 @@ function adjustNum(id,delta){
 // ── GOOGLE SHEETS SYNC ──
 
 async function fetchSheet(){
-  // Use Google Sheets CSV export — no API key needed, works with public sheets
-  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/export?format=csv&gid=0&t='+Date.now();
+  // Use Apps Script as proxy — handles CORS and no API key needed
+  const url=APPS_SCRIPT_URL+'?t='+Date.now();
   const r=await fetch(url);
   if(!r.ok)throw new Error('Could not load sheet ('+r.status+')');
-  const csv=await r.text();
-  const rows=parseCSV(csv);
-  // Skip header row
-  return rows.slice(1).filter(row=>row[0]).map(row=>({
-    uri:row[0]||'',title:row[1]||'',cover:row[2]||'',original:row[3]||'',status:row[4]||'pending'
-  }));
+  const d=await r.json();
+  if(d.error)throw new Error(d.error);
+  return d.rows||[];
 }
 
-function parseCSV(csv){
-  const COMMA=44,QUOTE=34,LF=10,CR=13;
-  const rows=[];
-  let row=[],cell="",inQ=false;
-  for(let i=0;i<=csv.length;i++){
-    const code=i<csv.length?csv.charCodeAt(i):LF;
-    if(code===QUOTE){
-      if(inQ&&csv.charCodeAt(i+1)===QUOTE){cell+=csv[i];i++;}
-      else inQ=!inQ;
-    } else if(code===COMMA&&!inQ){
-      row.push(cell);cell="";
-    } else if((code===LF||code===CR)&&!inQ){
-      row.push(cell);
-      if(row.some(c=>c.trim()))rows.push(row);
-      row=[];cell="";
-      if(code===CR&&csv.charCodeAt(i+1)===LF)i++;
-    } else if(i<csv.length){
-      cell+=csv[i];
-    }
-  }
-  return rows;
-}
 
 async function loadSongsFromSheet(){
   try{
