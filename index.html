@@ -359,19 +359,33 @@
   <div class="admin-hdr">
     <button class="back-btn" onclick="showScreen('login')">&#8592;</button>
     <div class="admin-title">Admin Panel</div>
-    <button class="admin-action-btn" style="margin-left:auto" onclick="syncPlaylist()">&#8635; Sync Playlist</button>
+    <button class="admin-action-btn" style="margin-left:auto" onclick="loadAdminPanel()">&#8635; Refresh</button>
   </div>
   <div id="admin-status" class="admin-status" style="display:none">Loading...</div>
-  <div id="admin-new-songs" class="admin-section" style="display:none">
-    <div class="admin-section-title">&#x2795; New Songs — Needs Original Artist</div>
-    <div id="admin-new-list"></div>
-  </div>
-  <div id="admin-removed-songs" class="admin-section" style="display:none">
-    <div class="admin-section-title">&#x2716; Removed from Spotify Playlist</div>
-    <div id="admin-removed-list"></div>
+  <div class="admin-section">
+    <div class="admin-section-title">&#x2795; Add New Song</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">Paste a Spotify track URL or URI to add a song to the game.</div>
+    <div style="display:flex;gap:8px;margin-bottom:.75rem">
+      <input class="admin-input" id="admin-spotify-url" placeholder="Paste Spotify URL or URI..." style="flex:1">
+      <button class="admin-action-btn" onclick="lookupSpotifyTrack()">Look Up</button>
+    </div>
+    <div id="admin-lookup-result" style="display:none;background:var(--vinyl);border-radius:10px;padding:.75rem">
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">Found:</div>
+      <div class="admin-song-row" style="padding:0;border:none">
+        <div class="admin-song-info">
+          <div class="admin-song-title" id="lookup-title"></div>
+          <div class="admin-song-artist" id="lookup-artist"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:.75rem;align-items:center">
+        <input class="admin-input" id="lookup-original" placeholder="Original artist...">
+        <button class="admin-action-btn" onclick="addLookedUpSong()">Add to Game</button>
+      </div>
+    </div>
+    <div id="admin-lookup-error" style="display:none;color:#e74c3c;font-size:.78rem;margin-top:.5rem"></div>
   </div>
   <div id="admin-pending-songs" class="admin-section" style="display:none">
-    <div class="admin-section-title">&#x23F3; Pending Approval</div>
+    <div class="admin-section-title">&#x23F3; Pending — Needs Original Artist</div>
     <div id="admin-pending-list"></div>
   </div>
   <div id="admin-approved-songs" class="admin-section">
@@ -1632,121 +1646,27 @@ function checkAdminPw(){
 async function loadAdminPanel(){
   const status=$('admin-status');
   status.style.display='block';
-
-  if(!token){
-    status.textContent='';
-    status.style.animation='none';
-    status.style.color='#e74c3c';
-    status.innerHTML='<b>Warning:</b> Connect with Spotify first so sync can access your playlist.';
-    status.innerHTML+='<br><br>';
-    const goBtn=document.createElement('button');
-    goBtn.className='admin-action-btn';
-    goBtn.textContent='Go to Login';
-    goBtn.onclick=()=>showScreen('login');
-    status.appendChild(goBtn);
-    return;
-  }
-
   status.style.color='';
   status.style.animation='';
-  status.textContent='Loading sheet data...';
+  status.textContent='Loading song database...';
   try{
     const sheetRows=await fetchSheet();
-    status.textContent='Sheet loaded. Fetching Spotify playlist...';
-    const spotifyTracks=await fetchSpotifyPlaylistUris();
-    if(spotifyTracks.length===0){
-      status.textContent='Could not fetch Spotify playlist. Make sure you are logged in.';
-      return;
-    }
-    renderAdminPanel(sheetRows,spotifyTracks);
+    renderAdminPanel(sheetRows);
     status.style.display='none';
   }catch(e){
-    status.textContent='Error: '+e.message;
+    status.textContent='Error loading sheet: '+e.message;
   }
 }
 
-async function fetchSpotifyPlaylistUris(){
-  if(!token)return[];
-  // Try fetching the playlist tracks with OAuth token
-  let uris=[];
-  try{
-    let url='https://api.spotify.com/v1/playlists/'+SPOTIFY_PLAYLIST_ID+'/tracks?limit=100';
-    while(url){
-      const r=await fetch(url,{headers:{Authorization:'Bearer '+token}});
-      const d=await r.json();
-      if(d.error){
-        if(d.error.status===403){
-          throw new Error('FORBIDDEN: Your Spotify app is in Development Mode. Go to developer.spotify.com/dashboard, click your app, Edit Settings, User Management, and add your Spotify email address. Then try again.');
-        }
-        throw new Error(d.error.message);
-      }
-      (d.items||[]).forEach(i=>{
-        if(i.track&&i.track.uri&&i.track.type==='track'){
-          uris.push({uri:i.track.uri,name:i.track.name,artist:i.track.artists?.map(a=>a.name).join(', ')});
-        }
-      });
-      url=d.next;
-    }
-  }catch(e){
-    throw e;
-  }
-  return uris;
-}
 
-async function syncPlaylist(){
-  await loadAdminPanel();
-}
-
-function renderAdminPanel(sheetRows, spotifyTracks){
-  const sheetUris=new Set(sheetRows.filter(r=>r.status!=='removed').map(r=>r.uri));
-  const spotifyUriSet=new Set(spotifyTracks.map(t=>t.uri));
-  const spotifyMap=Object.fromEntries(spotifyTracks.map(t=>[t.uri,t]));
-
-  // New songs in Spotify not in Sheet
-  const newSongs=spotifyTracks.filter(t=>!sheetUris.has(t.uri));
-  // Songs in Sheet but removed from Spotify (only non-removed rows)
-  const removedSongs=sheetRows.filter((r,i)=>r.status!=='removed'&&!spotifyUriSet.has(r.uri)).map((r,i)=>({...r,rowIdx:i+2}));
-  // Pending songs (in sheet, status=pending)
+function renderAdminPanel(sheetRows){
   const pendingSongs=sheetRows.map((r,i)=>({...r,rowIdx:i+2})).filter(r=>r.status==='pending');
-  // Approved songs
   const approvedSongs=sheetRows.map((r,i)=>({...r,rowIdx:i+2})).filter(r=>r.status==='approved');
 
-  // Render NEW songs
-  const newSection=$('admin-new-songs');
-  const newList=$('admin-new-list');
-  if(newSongs.length>0){
-    newSection.style.display='block';
-    newList.innerHTML=newSongs.map(t=>`
-      <div class="admin-song-row" id="new-${t.uri.replace(/:/g,'_')}">
-        <span class="admin-badge badge-new">NEW</span>
-        <div class="admin-song-info">
-          <div class="admin-song-title">${t.name}</div>
-          <div class="admin-song-artist">${t.artist}</div>
-        </div>
-        <input class="admin-input" placeholder="Original artist..." id="orig-${t.uri.replace(/:/g,'_')}">
-        <button class="admin-action-btn" onclick="approveNewSong('${t.uri}','${escHtml(t.name)}','${escHtml(t.artist)}')">Add</button>
-      </div>`).join('');
-  } else {
-    newSection.style.display='none';
-  }
-
-  // Render REMOVED songs
-  const removedSection=$('admin-removed-songs');
-  const removedList=$('admin-removed-list');
-  if(removedSongs.length>0){
-    removedSection.style.display='block';
-    removedList.innerHTML=removedSongs.map(r=>`
-      <div class="admin-song-row" id="rem-row-${r.rowIdx}">
-        <span class="admin-badge badge-removed">REMOVED</span>
-        <div class="admin-song-info">
-          <div class="admin-song-title">${r.title}</div>
-          <div class="admin-song-artist">${r.cover}</div>
-        </div>
-        <button class="admin-action-btn red" onclick="confirmRemoveSong(${r.rowIdx},'${escHtml(r.uri)}','${escHtml(r.title)}')">Delete</button>
-      </div>`).join('');
-  } else {
-    removedSection.style.display='none';
-  }
+  // Reset lookup UI
+  $('admin-lookup-result').style.display='none';
+  $('admin-lookup-error').style.display='none';
+  $('admin-spotify-url').value='';
 
   // Render PENDING songs
   const pendingSection=$('admin-pending-songs');
@@ -1769,7 +1689,7 @@ function renderAdminPanel(sheetRows, spotifyTracks){
 
   // Render APPROVED count + list
   $('admin-approved-count').textContent=approvedSongs.length;
-  $('admin-approved-list').innerHTML=approvedSongs.slice(0,10).map(r=>`
+  $('admin-approved-list').innerHTML=approvedSongs.map(r=>`
     <div class="admin-song-row">
       <span class="admin-badge badge-approved">OK</span>
       <div class="admin-song-info">
@@ -1777,22 +1697,63 @@ function renderAdminPanel(sheetRows, spotifyTracks){
         <div class="admin-song-artist">${r.cover} / <em>${r.original}</em></div>
       </div>
       <button class="admin-action-btn red" onclick="confirmRemoveSong(${r.rowIdx},'${escHtml(r.uri)}','${escHtml(r.title)}')">Remove</button>
-    </div>`).join('')+(approvedSongs.length>10?`<div style="text-align:center;font-size:.78rem;color:var(--muted);padding:.5rem">...and ${approvedSongs.length-10} more</div>`:'');
+    </div>`).join('');
 }
 
 function escHtml(s){return (s||'').replace(/'/g,"\'")}
 
-async function approveNewSong(uri, name, artist){
-  const safeUri=uri.replace(/:/g,'_');
-  const origInput=document.getElementById('orig-'+safeUri);
-  const original=(origInput?origInput.value:'').trim();
-  if(!original){alert('Please enter the original artist first.');return;}
+let lookedUpTrack=null;
+
+async function lookupSpotifyTrack(){
+  const input=$('admin-spotify-url').value.trim();
+  const errEl=$('admin-lookup-error');
+  const resultEl=$('admin-lookup-result');
+  errEl.style.display='none';
+  resultEl.style.display='none';
+  lookedUpTrack=null;
+
+  if(!input){errEl.textContent='Please paste a Spotify URL or URI.';errEl.style.display='block';return;}
+
+  // Extract track ID from URL or URI
+  let trackId=null;
+  if(input.startsWith('spotify:track:')){
+    trackId=input.replace('spotify:track:','');
+  } else {
+    const m=input.match(/track\/([a-zA-Z0-9]+)/);
+    if(m)trackId=m[1];
+  }
+
+  if(!trackId){errEl.textContent='Could not find a track ID. Paste a Spotify track URL or URI.';errEl.style.display='block';return;}
+
+  if(!token){errEl.textContent='Please connect with Spotify first.';errEl.style.display='block';return;}
+
   try{
-    await writeToSheet([uri,name,artist,original,'approved']);
-    const row=document.getElementById('new-'+safeUri);
-    if(row)row.remove();
-    alert('Added: '+name+' by '+artist);
-    // Reload to refresh counts
+    const r=await fetch('https://api.spotify.com/v1/tracks/'+trackId,{headers:{Authorization:'Bearer '+token}});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    lookedUpTrack={
+      uri:'spotify:track:'+trackId,
+      name:d.name,
+      artist:d.artists?.map(a=>a.name).join(', ')||''
+    };
+    $('lookup-title').textContent=lookedUpTrack.name;
+    $('lookup-artist').textContent='by '+lookedUpTrack.artist;
+    $('lookup-original').value='';
+    resultEl.style.display='block';
+  }catch(e){
+    errEl.textContent='Error: '+e.message;
+    errEl.style.display='block';
+  }
+}
+
+async function addLookedUpSong(){
+  if(!lookedUpTrack){alert('Please look up a track first.');return;}
+  const original=$('lookup-original').value.trim();
+  if(!original){alert('Please enter the original artist.');return;}
+  try{
+    await writeToSheet([lookedUpTrack.uri,lookedUpTrack.name,lookedUpTrack.artist,original,'approved']);
+    alert('Added: '+lookedUpTrack.name+' - covered by '+lookedUpTrack.artist+' / original by '+original);
+    lookedUpTrack=null;
     loadAdminPanel();
   }catch(e){alert('Error saving: '+e.message)}
 }
