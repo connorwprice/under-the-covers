@@ -390,9 +390,10 @@ window.onunhandledrejection=function(e){
 };
 const CLIENT_ID = '274caba37a3d41ef917a10b396e54987';
 const SHEET_ID = '1BFnqxz-wWE_j8CiDO4kV_kN45Sb0YarKJ5HRAYA9QU8';
-const SHEETS_API_KEY = 'AIzaSyC-0TqqAX_Fk65_NlkTia-B9fkJQqzYpJ4';
+// Sheets reads via CSV export, writes via Apps Script
 const SPOTIFY_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
 const ADMIN_PASSWORD = 'utc2024';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_lW3D9rvYKuuM4pNfTE1pz7XMRJxndLp6Jiof4ZEJsJaWbYjrHKTn-7WrIrvtwwN8mQ/exec';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 
 const DB=[
@@ -1555,13 +1556,39 @@ function adjustNum(id,delta){
 // ── GOOGLE SHEETS SYNC ──
 
 async function fetchSheet(){
-  const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A2:E2000?key=${SHEETS_API_KEY}`;
+  // Use Google Sheets CSV export — no API key needed, works with public sheets
+  const url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/export?format=csv&gid=0&t='+Date.now();
   const r=await fetch(url);
-  const d=await r.json();
-  if(d.error)throw new Error(d.error.message);
-  return (d.values||[]).map(row=>({
+  if(!r.ok)throw new Error('Could not load sheet ('+r.status+')');
+  const csv=await r.text();
+  const rows=parseCSV(csv);
+  // Skip header row
+  return rows.slice(1).filter(row=>row[0]).map(row=>({
     uri:row[0]||'',title:row[1]||'',cover:row[2]||'',original:row[3]||'',status:row[4]||'pending'
   }));
+}
+
+function parseCSV(csv){
+  const COMMA=44,QUOTE=34,LF=10,CR=13;
+  const rows=[];
+  let row=[],cell="",inQ=false;
+  for(let i=0;i<=csv.length;i++){
+    const code=i<csv.length?csv.charCodeAt(i):LF;
+    if(code===QUOTE){
+      if(inQ&&csv.charCodeAt(i+1)===QUOTE){cell+=csv[i];i++;}
+      else inQ=!inQ;
+    } else if(code===COMMA&&!inQ){
+      row.push(cell);cell="";
+    } else if((code===LF||code===CR)&&!inQ){
+      row.push(cell);
+      if(row.some(c=>c.trim()))rows.push(row);
+      row=[];cell="";
+      if(code===CR&&csv.charCodeAt(i+1)===LF)i++;
+    } else if(i<csv.length){
+      cell+=csv[i];
+    }
+  }
+  return rows;
 }
 
 async function loadSongsFromSheet(){
@@ -1576,31 +1603,28 @@ async function loadSongsFromSheet(){
 }
 
 async function writeToSheet(rowData){
-  // Append a row to the sheet via Google Sheets API (write via fetch with token)
-  // We use the Sheets API with the user's OAuth token for writes
-  const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A:E:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS&key=${SHEETS_API_KEY}`;
-  const r=await fetch(url,{
+  const r=await fetch(APPS_SCRIPT_URL,{
     method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-    body:JSON.stringify({values:[rowData]})
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'append',data:rowData})
   });
-  return r.json();
+  const d=await r.json();
+  if(d.error)throw new Error(d.error);
+  return d;
 }
 
 async function updateSheetRow(rowIndex, values){
-  // rowIndex is 1-based (row 2 = first data row)
-  const range=`Sheet1!A${rowIndex}:E${rowIndex}`;
-  const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueInputOption=RAW&key=${SHEETS_API_KEY}`;
-  const r=await fetch(url,{
-    method:'PUT',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-    body:JSON.stringify({range,majorDimension:'ROWS',values:[values]})
+  const r=await fetch(APPS_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:'update',rowIndex,data:values})
   });
-  return r.json();
+  const d=await r.json();
+  if(d.error)throw new Error(d.error);
+  return d;
 }
 
 async function deleteSheetRow(rowIndex){
-  // Mark as removed rather than deleting
   return updateSheetRow(rowIndex,[null,null,null,null,'removed']);
 }
 
