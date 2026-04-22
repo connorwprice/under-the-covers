@@ -1062,7 +1062,7 @@ async function loginSpotify(){
 async function handleCallback(code){
   const v=sessionStorage.getItem('pkce_v');
   const redirectUri=window.location.origin+window.location.pathname;
-  if(!v){return false}
+  if(!v){showLoginError('Session expired. Please try connecting again.');return false}
   try{
     const r=await fetch('https://accounts.spotify.com/api/token',{
       method:'POST',
@@ -1070,11 +1070,22 @@ async function handleCallback(code){
       body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:CLIENT_ID,code_verifier:v})
     });
     const d=await r.json();
-    debug('Token response: '+JSON.stringify(d).substring(0,120));
     if(d.access_token){token=d.access_token;sessionStorage.removeItem('pkce_v');return true}
-    debug('ERROR: '+JSON.stringify(d));
+    showLoginError('Login failed: '+(d.error_description||d.error||'Unknown error'));
     return false;
-  }catch(e){return false}
+  }catch(e){showLoginError('Connection error. Please try again.');return false}
+}
+
+function showLoginError(msg){
+  let el=document.getElementById('login-err-msg');
+  if(!el){
+    el=document.createElement('div');
+    el.id='login-err-msg';
+    el.style.cssText='color:#e74c3c;font-size:.82rem;background:#2a1010;border-radius:8px;padding:.75rem;text-align:center;width:100%';
+    document.getElementById('screen-login').appendChild(el);
+  }
+  el.textContent=msg;
+  el.style.display='block';
 }
 
 const UTC_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
@@ -1795,12 +1806,19 @@ async function confirmRemoveSong(rowIdx, uri, title){
 (async()=>{
   const p=new URLSearchParams(location.search);
   const code=p.get('code'),error=p.get('error');
-  if(error){return}
-  if(code){
+  if(error){
     history.replaceState({},'',location.pathname);
+    showLoginError('Spotify login was cancelled. Please try again.');
+    return;
+  }
+  if(code){
     const ok=await handleCallback(code);
-    if(ok){await loadPlaylists();}
-    else{}
+    if(ok){
+      history.replaceState({},'',location.pathname);
+      await loadPlaylists();
+    } else {
+      history.replaceState({},'',location.pathname);
+    }
   }
 })();
 </script>
