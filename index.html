@@ -22,11 +22,8 @@
   .spotify-btn:hover{background:#1ed760;transform:scale(1.02)}
   .or-row{display:flex;align-items:center;gap:10px;width:100%;color:var(--muted);font-size:.8rem}
   .or-row::before,.or-row::after{content:'';flex:1;height:1px;background:#333}
-  .demo-btn{background:none;border:1.5px solid var(--gold);color:var(--gold);border-radius:50px;padding:13px 28px;font-family:'DM Sans',sans-serif;font-size:.95rem;cursor:pointer;width:100%;transition:background .15s,color .15s}
-  .demo-btn:hover{background:var(--gold);color:var(--vinyl)}
   .hint{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.6}
   .debug-box{background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:.75rem;font-size:.72rem;color:#aaa;word-break:break-all;line-height:1.6;width:100%}
-  .err-banner{color:#e74c3c;font-size:.82rem;background:#2a1010;border-radius:8px;padding:.75rem;text-align:center;width:100%;display:none}
   #screen-playlist{padding:1.25rem;gap:1rem}
   .screen-header{display:flex;align-items:center;gap:10px;padding-bottom:.5rem}
   .back-btn{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1.3rem;padding:4px 8px 4px 0;line-height:1}
@@ -184,12 +181,10 @@
     <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
     Connect with Spotify
   </button>
-  <div class="or-row">or</div>
-  <button class="demo-btn" onclick="startDemo()">Play with Built-in Song List</button>
+
   <p class="hint">Spotify Premium required for audio playback.<br>Connects directly to the Under the Covers playlist.</p>
   <button class="admin-link-btn" id="admin-link-btn" onclick="showAdminLogin()">⚙ Admin</button>
-  <div id="debug-box" class="debug-box"></div>
-  <div id="err-banner" class="err-banner"></div>
+
 </div>
 
 
@@ -396,15 +391,6 @@
 
 </div>
 <script>
-window.onerror=function(msg,src,line,col,err){
-  const b=document.getElementById('debug-box');
-  if(b){b.style.display='block';b.innerHTML+='<b style="color:#e74c3c">ERROR:</b> '+msg+' (line '+line+')<br>';}
-  return false;
-};
-window.onunhandledrejection=function(e){
-  const b=document.getElementById('debug-box');
-  if(b){b.style.display='block';b.innerHTML+='<b style="color:#e74c3c">PROMISE ERROR:</b> '+(e.reason?.message||e.reason)+'<br>';}
-};
 const CLIENT_ID = '274caba37a3d41ef917a10b396e54987';
 const SHEET_ID = '1BFnqxz-wWE_j8CiDO4kV_kN45Sb0YarKJ5HRAYA9QU8';
 // Sheets reads via CSV export, writes via Apps Script
@@ -1068,7 +1054,6 @@ async function loginSpotify(){
   const v=rnd(),c=await challenge(v);
   sessionStorage.setItem('pkce_v',v);
   const redirectUri=window.location.origin+window.location.pathname;
-  debug('Redirect URI: '+redirectUri);
   const url='https://accounts.spotify.com/authorize?'+new URLSearchParams({
     client_id:CLIENT_ID,response_type:'code',redirect_uri:redirectUri,
     scope:'user-read-private playlist-read-private playlist-read-collaborative user-read-playback-state user-modify-playback-state',
@@ -1080,8 +1065,7 @@ async function loginSpotify(){
 async function handleCallback(code){
   const v=sessionStorage.getItem('pkce_v');
   const redirectUri=window.location.origin+window.location.pathname;
-  debug('Exchanging code, redirect_uri='+redirectUri);
-  if(!v){debug('ERROR: No PKCE verifier in sessionStorage');return false}
+  if(!v){return false}
   try{
     const r=await fetch('https://accounts.spotify.com/api/token',{
       method:'POST',
@@ -1093,7 +1077,7 @@ async function handleCallback(code){
     if(d.access_token){token=d.access_token;sessionStorage.removeItem('pkce_v');return true}
     debug('ERROR: '+JSON.stringify(d));
     return false;
-  }catch(e){debug('Fetch error: '+e.message);return false}
+  }catch(e){return false}
 }
 
 const UTC_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
@@ -1105,12 +1089,6 @@ async function loadPlaylists(){
   renderTeamInputs();
 }
 
-function startDemo(){
-  usingSpotify=false;selectedPl=null;
-  $('setup-back').onclick=()=>showScreen('login');
-  showScreen('setup');
-  renderTeamInputs();
-}
 
 // ── SPOTIFY CONNECT ──
 // Uses Spotify Connect API — controls whatever device is currently active
@@ -1186,8 +1164,6 @@ async function startGame(){
   if(usingSpotify){
     tracks=[...TRACKS];
     await initPlayer();
-  } else {
-    tracks=[...DB];
   }
 
   shuffle(tracks);idx=0;
@@ -1618,17 +1594,30 @@ function jsonpFetch(url){
 }
 
 async function writeToSheet(rowData){
-  // Fire-and-forget with no-cors — we verify by reloading sheet after
+  // Check for duplicate URI before writing
+  const uri=rowData[0];
+  try{
+    const existing=await fetchSheet();
+    const duplicate=existing.find(r=>r.uri===uri&&r.status!=='removed');
+    if(duplicate){
+      throw new Error('"'+rowData[1]+'" is already in the game database.');
+    }
+  }catch(e){
+    if(e.message.includes('already in the game'))throw e;
+    // If sheet check fails, proceed anyway
+  }
   const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'append',data:JSON.stringify(rowData)}).toString();
   await fetch(url,{mode:'no-cors',redirect:'follow'});
-  // Wait briefly for sheet to update
-  await new Promise(res=>setTimeout(res,1500));
+  await new Promise(res=>setTimeout(res,2000));
 }
 
 async function updateSheetRow(rowIndex, values){
-  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'update',rowIndex,data:JSON.stringify(values)}).toString();
+  // Pad to 5 columns to ensure all cells are written
+  const padded=[...values];
+  while(padded.length<5)padded.push('');
+  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'update',rowIndex,data:JSON.stringify(padded)}).toString();
   await fetch(url,{mode:'no-cors',redirect:'follow'});
-  await new Promise(res=>setTimeout(res,1500));
+  await new Promise(res=>setTimeout(res,2000));
 }
 
 async function deleteSheetRow(rowIndex){
@@ -1765,12 +1754,20 @@ async function addLookedUpSong(){
   if(!lookedUpTrack){alert('Please look up a track first.');return;}
   const original=$('lookup-original').value.trim();
   if(!original){alert('Please enter the original artist.');return;}
+  // Disable button immediately to prevent double-submit
+  const btn=document.querySelector('[onclick="addLookedUpSong()"]');
+  if(btn){btn.disabled=true;btn.textContent='Adding...';}
   try{
     await writeToSheet([lookedUpTrack.uri,lookedUpTrack.name,lookedUpTrack.artist,original,'approved']);
-    alert('Added: '+lookedUpTrack.name+' - covered by '+lookedUpTrack.artist+' / original by '+original);
     lookedUpTrack=null;
+    $('admin-spotify-url').value='';
+    $('admin-lookup-result').style.display='none';
+    alert('Added successfully! Refreshing...');
     loadAdminPanel();
-  }catch(e){alert('Error saving: '+e.message)}
+  }catch(e){
+    alert('Error saving: '+e.message);
+    if(btn){btn.disabled=false;btn.textContent='Add to Game';}
+  }
 }
 
 async function approvePendingSong(rowIdx, uri, title, cover){
@@ -1787,26 +1784,25 @@ async function approvePendingSong(rowIdx, uri, title, cover){
 
 async function confirmRemoveSong(rowIdx, uri, title){
   if(!confirm('Remove "'+title+'" from the game?'))return;
+  const btn=document.querySelector('[onclick*="confirmRemoveSong('+rowIdx+'"]');
+  if(btn){btn.disabled=true;btn.textContent='Removing...';}
   try{
+    // Mark entire row as removed with all fields preserved
     await updateSheetRow(rowIdx,[uri,title,'','','removed']);
-    document.getElementById('rem-row-'+rowIdx)?.remove();
+    alert('Removed successfully! Refreshing...');
     loadAdminPanel();
   }catch(e){alert('Error removing: '+e.message)}
 }
 
 // ── INIT ──
 (async()=>{
-  debug('Page URL: '+location.href);
-  debug('Origin: '+location.origin);
-  debug('Redirect URI will be: '+location.origin+location.pathname);
   const p=new URLSearchParams(location.search);
   const code=p.get('code'),error=p.get('error');
-  if(error){debug('Spotify returned error: '+error);showErr('Spotify login cancelled or failed.');return}
+  if(error){showErr('Spotify login cancelled or failed.');return}
   if(code){
-    debug('Got auth code, exchanging...');
     history.replaceState({},'',location.pathname);
     const ok=await handleCallback(code);
-    if(ok){debug('Token obtained! Loading playlists...');await loadPlaylists();}
+    if(ok){await loadPlaylists();}
     else{showErr('Login failed — check debug info above.')}
   }
 })();
