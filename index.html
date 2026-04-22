@@ -23,7 +23,6 @@
   .or-row{display:flex;align-items:center;gap:10px;width:100%;color:var(--muted);font-size:.8rem}
   .or-row::before,.or-row::after{content:'';flex:1;height:1px;background:#333}
   .hint{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.6}
-  .debug-box{background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:.75rem;font-size:.72rem;color:#aaa;word-break:break-all;line-height:1.6;width:100%}
   #screen-playlist{padding:1.25rem;gap:1rem}
   .screen-header{display:flex;align-items:center;gap:10px;padding-bottom:.5rem}
   .back-btn{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1.3rem;padding:4px 8px 4px 0;line-height:1}
@@ -1028,7 +1027,7 @@ let winPts=25,roundSecs=60,timeLeft=60;
 let timer=null,roundPts=0;
 let chks={title:false,cover:false,original:false};
 let deviceId=null;
-let usingSpotify=false,active=false;
+let usingSpotify=true,active=false;
 
 const $=id=>document.getElementById(id);
 function showScreen(id){
@@ -1043,8 +1042,6 @@ function showScreen(id){
   }
 }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}}
-function debug(msg){const b=$('debug-box');b.style.display='block';b.innerHTML+=msg+'<br>'}
-function showErr(msg){const b=$('err-banner');b.style.display='block';b.textContent=msg}
 
 // ── AUTH ──
 function rnd(){const a=new Uint8Array(32);crypto.getRandomValues(a);return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')}
@@ -1798,12 +1795,12 @@ async function confirmRemoveSong(rowIdx, uri, title){
 (async()=>{
   const p=new URLSearchParams(location.search);
   const code=p.get('code'),error=p.get('error');
-  if(error){showErr('Spotify login cancelled or failed.');return}
+  if(error){return}
   if(code){
     history.replaceState({},'',location.pathname);
     const ok=await handleCallback(code);
     if(ok){await loadPlaylists();}
-    else{showErr('Login failed — check debug info above.')}
+    else{}
   }
 })();
 </script>
