@@ -390,6 +390,13 @@
 
 </div>
 <script>
+window.onerror=function(msg,src,line){
+  showLoginError('JS Error: '+msg+' (line '+line+')');
+  return false;
+};
+window.onunhandledrejection=function(e){
+  showLoginError('Error: '+(e.reason?.message||String(e.reason)));
+};
 const CLIENT_ID = '274caba37a3d41ef917a10b396e54987';
 const SHEET_ID = '1BFnqxz-wWE_j8CiDO4kV_kN45Sb0YarKJ5HRAYA9QU8';
 // Sheets reads via CSV export, writes via Apps Script
