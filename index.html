@@ -1667,13 +1667,28 @@ async function loadAdminPanel(){
 
 async function fetchSpotifyPlaylistUris(){
   if(!token)return[];
-  let uris=[],url=`https://api.spotify.com/v1/playlists/${SPOTIFY_PLAYLIST_ID}/tracks?limit=100&fields=next,items(track(uri,name,artists))`;
-  while(url){
-    const r=await fetch(url,{headers:{Authorization:'Bearer '+token}});
-    const d=await r.json();
-    if(d.error)throw new Error(d.error.message);
-    (d.items||[]).forEach(i=>{if(i.track&&i.track.uri)uris.push({uri:i.track.uri,name:i.track.name,artist:i.track.artists?.map(a=>a.name).join(', ')})});
-    url=d.next;
+  // Try fetching the playlist tracks with OAuth token
+  let uris=[];
+  try{
+    let url='https://api.spotify.com/v1/playlists/'+SPOTIFY_PLAYLIST_ID+'/tracks?limit=100';
+    while(url){
+      const r=await fetch(url,{headers:{Authorization:'Bearer '+token}});
+      const d=await r.json();
+      if(d.error){
+        if(d.error.status===403){
+          throw new Error('FORBIDDEN: Your Spotify app is in Development Mode. Go to developer.spotify.com/dashboard, click your app, Edit Settings, User Management, and add your Spotify email address. Then try again.');
+        }
+        throw new Error(d.error.message);
+      }
+      (d.items||[]).forEach(i=>{
+        if(i.track&&i.track.uri&&i.track.type==='track'){
+          uris.push({uri:i.track.uri,name:i.track.name,artist:i.track.artists?.map(a=>a.name).join(', ')});
+        }
+      });
+      url=d.next;
+    }
+  }catch(e){
+    throw e;
   }
   return uris;
 }
