@@ -427,6 +427,7 @@ let currentTeamIdx=0;
 let roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
 let playedUris=new Set();
 let carryOverSong=null;
+let pendingCarryOver=null; // applied only at start of NEXT team's round
 let songHistory=[];
 let roundSongHistory=[];
 let prevSongData=null;
@@ -658,6 +659,8 @@ async function beginRound(){
   }
   bar.className='turn-bar'+(currentTeamIdx%2===0?'':' b');
   teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i]});
+  carryOverSong=pendingCarryOver||null;
+  pendingCarryOver=null;
   loadSong();startTimer();
 }
 
@@ -789,8 +792,9 @@ async function nextSong(){
       existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
       if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
     }
-    if(pts===0&&currentSong)carryOverSong={...currentSong};
-    else carryOverSong=null;
+    if(pts===0&&currentSong)pendingCarryOver={...currentSong};
+    else pendingCarryOver=null;
+    carryOverSong=null;
     if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){winTriggeredBy=currentTeamIdx;roundsThisCycle=0;}
     // Return to forward song
     isNavigating=false;
@@ -844,12 +848,13 @@ async function nextSong(){
   // Clear navigation state after normal next
   isNavigating=false;
 
-  // If 0 points scored, carry current song to next team
+  // If 0 points scored, save for NEXT team's round (not current team)
   if(pts===0 && currentSong){
-    carryOverSong={...currentSong};
+    pendingCarryOver={...currentSong};
   } else {
-    carryOverSong=null;
+    pendingCarryOver=null;
   }
+  carryOverSong=null; // never use carry-over mid-round
 
   // Check win trigger
   if(teamScores[currentTeamIdx]>=winPts && winTriggeredBy===-1){
@@ -870,9 +875,9 @@ function startTimer(){
       const curCover=$('ans-cover').textContent;
       const curOriginal=$('ans-original').textContent;
       if(curTitle&&curTitle!=='—'&&curTitle!=='Loading...'){
-        // Find current song uri
         const curSong=tracks.find(s=>(s.t||s.name)===curTitle);
-        carryOverSong={t:curTitle,c:curCover,o:curOriginal,uri:curSong?.uri||null};
+        pendingCarryOver={t:curTitle,c:curCover,o:curOriginal,uri:curSong?.uri||null};
+        carryOverSong=null;
       }
       // 5-second grace period — show scoring table with countdown
       showGracePeriod();
@@ -979,14 +984,9 @@ function endRound(){
     // Populate songs played this turn
   const songsEl=$('re-songs');
   const songsListEl=$('re-songs-list');
-  // Build per-team song tables for this round
-  // Show each team that played this round
-  const teamsThisRound=[...new Set(roundSongHistory.map(s=>s.team))];
-  // Also show all active teams even if no songs scored
-  const allTeamsThisRound=teamNames.filter((_,i)=>activeTeamIndices.includes(i));
-  // Combine — show active teams in order
+  // Per-team scored songs only — no unscored songs between rounds
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
-
+  const allTeamsThisRound=teamNames.filter((_,i)=>activeTeamIndices.includes(i));
   let roundSongsHtml='';
   let anyScored=false;
 
@@ -996,23 +996,18 @@ function endRound(){
     const teamSongs=roundSongHistory.filter(s=>s.team===teamName&&s.pts>0);
     if(teamSongs.length===0)return;
     anyScored=true;
-    roundSongsHtml+=`<div style="margin-bottom:4px">
-      <div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:${color};margin-bottom:.35rem;font-weight:600">${teamName}</div>`;
-    roundSongsHtml+=teamSongs.map(s=>{
-      const checks=[];
-      if(s.checks.title)checks.push('Title');
-      if(s.checks.cover)checks.push('Cover');
-      if(s.checks.original)checks.push('Original');
-      return `<div style="background:var(--vinyl);border-radius:8px;padding:7px 10px;font-size:.78rem;margin-bottom:4px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="color:var(--green);font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;min-width:20px">+${s.pts}</span>
-          <div style="font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.title}</div>
-        </div>
-        <div style="font-size:.7rem;color:var(--muted);padding-left:28px">${s.cover} · Original: ${s.original}</div>
-        ${checks.length?`<div style="font-size:.68rem;color:var(--green);padding-left:28px">✓ ${checks.join(', ')}</div>`:''}
-      </div>`;
-    }).join('');
-    roundSongsHtml+='</div>';
+    roundSongsHtml+='<div style="margin-bottom:.75rem">';
+    roundSongsHtml+='<div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:'+color+';margin-bottom:.35rem;font-weight:600">'+teamName+'</div>';
+    roundSongsHtml+='<table style="width:100%;border-collapse:collapse;font-size:.78rem">';
+    roundSongsHtml+=teamSongs.map(s=>
+      '<tr style="border-bottom:1px solid #333">'+
+      '<td style="padding:5px 6px;font-weight:500">'+s.title+'</td>'+
+      '<td style="padding:5px 4px;color:var(--muted);font-size:.72rem">'+s.cover+'</td>'+
+      '<td style="padding:5px 4px;color:var(--muted);font-size:.72rem;font-style:italic">'+s.original+'</td>'+
+      '<td style="padding:5px 4px;text-align:right;color:var(--green);font-family:Playfair Display,serif;font-weight:700;white-space:nowrap">+'+s.pts+'</td>'+
+      '</tr>'
+    ).join('');
+    roundSongsHtml+='</table></div>';
   });
 
   if(anyScored){
@@ -1123,7 +1118,7 @@ async function playAgain(){
   currentTeamIdx=0;winTriggeredBy=-1;roundNumber=1;teamsPlayedThisRound=0;
   activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
   activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
-  playedUris=new Set();carryOverSong=null;songHistory=[];roundSongHistory=[];prevSongData=null;nextSongSlot=null;isNavigating=false;currentSongChecks=null;shuffle(tracks);idx=0;
+  playedUris=new Set();carryOverSong=null;pendingCarryOver=null;songHistory=[];roundSongHistory=[];prevSongData=null;nextSongSlot=null;isNavigating=false;currentSongChecks=null;shuffle(tracks);idx=0;
   renderScoreHeader();showScreen('game');await beginRound();
 }
 
@@ -1136,78 +1131,52 @@ function renderStats(){
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
   let html='';
 
-  // Scores banner
-  const maxScore=Math.max(...teamScores);
-  const scoreChips=teamNames.map((n,i)=>`
-    <div style="text-align:center">
-      <div style="font-size:.72rem;color:var(--muted)">${n}</div>
-      <div style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:${colors[i%colors.length]}">${teamScores[i]}</div>
-    </div>`).join('<div style="font-family:Playfair Display,serif;font-size:1.2rem;color:var(--muted);align-self:center">·</div>');
-  // Full game song history — separated by team
-  if(songHistory.length>0){
-    // Group by team
-    const byTeam={};
-    songHistory.forEach(s=>{
-      if(!byTeam[s.team])byTeam[s.team]={scored:[],unscored:[]};
-      if(s.pts>0)byTeam[s.team].scored.push(s);
-      else byTeam[s.team].unscored.push(s);
-    });
-    Object.entries(byTeam).forEach(([team,songs])=>{
-      html+='<div class="stats-team-card"><div class="stats-section-label" style="margin-bottom:.75rem">'+team+' — Songs Played</div>';
-      if(songs.scored.length>0){
-        html+='<div style="font-size:.68rem;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.4rem">Scored</div>';
-        html+=songs.scored.map(s=>{
-          const checks=[];
-          if(s.checks.title)checks.push('Title');
-          if(s.checks.cover)checks.push('Cover');
-          if(s.checks.original)checks.push('Original');
-          return '<div style="background:var(--vinyl);border-radius:8px;padding:7px 10px;font-size:.78rem;margin-bottom:4px">'+
-            '<div style="display:flex;gap:8px;align-items:center">'+
-            '<span style="color:var(--green);font-family:Playfair Display,serif;font-weight:700;min-width:20px">+'+s.pts+'</span>'+
-            '<div style="font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.title+'</div></div>'+
-            '<div style="font-size:.7rem;color:var(--muted);padding-left:28px">'+s.cover+' · Original: '+s.original+'</div>'+
-            (checks.length?'<div style="font-size:.68rem;color:var(--green);padding-left:28px">✓ '+checks.join(', ')+'</div>':'')+
-            '</div>';
-        }).join('');
-      }
-      if(songs.unscored.length>0){
-        html+='<div style="font-size:.68rem;color:#666;letter-spacing:.1em;text-transform:uppercase;margin:.6rem 0 .4rem">Not Scored</div>';
-        html+=songs.unscored.map(s=>
-          '<div style="background:var(--vinyl);border-radius:8px;padding:7px 10px;font-size:.78rem;margin-bottom:4px;opacity:.7">'+
-          '<div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.title+'</div>'+
-          '<div style="font-size:.7rem;color:var(--muted)">'+s.cover+' · Original: '+s.original+'</div></div>'
-        ).join('');
-      }
-      html+='</div>';
-    });
-  }
+  // ── Scoreboard ──
+  const scoreChips=teamNames.map((n,i)=>
+    '<div style="text-align:center">'+
+    '<div style="font-size:.72rem;color:var(--muted)">'+n+'</div>'+
+    '<div style="font-family:Playfair Display,serif;font-size:2rem;font-weight:700;color:'+colors[i%colors.length]+'">'+teamScores[i]+'</div>'+
+    '</div>'
+  ).join('<div style="color:var(--muted);align-self:center;padding:0 4px">·</div>');
+  html+='<div class="stats-team-card" style="text-align:center">'+
+    '<div class="stats-section-label">Scoreboard</div>'+
+    '<div style="display:flex;justify-content:center;align-items:center;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">'+scoreChips+'</div>'+
+    '</div>';
 
-  html+=`<div class="stats-team-card" style="text-align:center">
-    <div class="stats-section-label">Scoreboard</div>
-    <div style="display:flex;justify-content:center;align-items:center;gap:.75rem;margin-top:.5rem;flex-wrap:wrap">${scoreChips}</div>
-  </div>`;
+  // ── Per-team song tables ──
+  const byTeam={};
+  songHistory.forEach(s=>{
+    if(!byTeam[s.team])byTeam[s.team]=[];
+    byTeam[s.team].push(s);
+  });
 
-  // Per-team breakdowns
   teamNames.forEach((name,i)=>{
-    const s=teamStats[i];
-    const songsAttempted=s.songs||1;
-    const pct=n=>Math.round(n/songsAttempted*100)+'%';
-    html+=`<div class="stats-team-card">
-      <div class="stats-team-name" style="color:${colors[i%colors.length]}">${name}</div>
-      <div class="stats-grid">
-        <div class="stat-cell"><div class="stat-label">Total Points</div><div class="stat-value gold">${s.points}</div></div>
-        <div class="stat-cell"><div class="stat-label">Songs Played</div><div class="stat-value">${s.songs}</div></div>
-        <div class="stat-cell"><div class="stat-label">Song Titles</div><div class="stat-value">${s.titles}</div><div class="stat-pct">${pct(s.titles)}</div></div>
-        <div class="stat-cell"><div class="stat-label">Cover Artists</div><div class="stat-value">${s.covers}</div><div class="stat-pct">${pct(s.covers)}</div></div>
-        <div class="stat-cell"><div class="stat-label">Original Artists</div><div class="stat-value">${s.originals}</div><div class="stat-pct">${pct(s.originals)}</div></div>
-        <div class="stat-cell"><div class="stat-label">Skips</div><div class="stat-value">${s.skips}</div></div>
-      </div>
-      <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid #333">
-        <div class="stats-total-row"><span>Rounds played</span><span>${s.rounds}</span></div>
-        <div class="stats-total-row"><span>Avg pts per song</span><span>${s.songs>0?(s.points/s.songs).toFixed(1):0}</span></div>
-        <div class="stats-total-row"><span>Best category</span><span>${bestCat(s)}</span></div>
-      </div>
-    </div>`;
+    const color=colors[i%colors.length];
+    const songs=byTeam[name]||[];
+    html+='<div class="stats-team-card">';
+    html+='<div class="stats-team-name" style="color:'+color+'">'+name+'</div>';
+    if(songs.length>0){
+      html+='<table style="width:100%;border-collapse:collapse;font-size:.78rem">';
+      html+='<tr style="border-bottom:1px solid #444">'+
+        '<th style="text-align:left;padding:4px 6px;font-size:.68rem;color:var(--muted);font-weight:500">Title</th>'+
+        '<th style="text-align:left;padding:4px 4px;font-size:.68rem;color:var(--muted);font-weight:500">Cover</th>'+
+        '<th style="text-align:left;padding:4px 4px;font-size:.68rem;color:var(--muted);font-weight:500">Original</th>'+
+        '<th style="text-align:right;padding:4px 4px;font-size:.68rem;color:var(--muted);font-weight:500">Pts</th></tr>';
+      songs.forEach(s=>{
+        const ptColor=s.pts>0?'var(--green)':'#666';
+        const ptDisplay=s.pts>0?'+'+s.pts:'—';
+        html+='<tr style="border-bottom:1px solid #2a2a2a">'+
+          '<td style="padding:6px 6px;font-weight:500;font-size:.78rem">'+s.title+'</td>'+
+          '<td style="padding:6px 4px;color:var(--muted);font-size:.72rem">'+s.cover+'</td>'+
+          '<td style="padding:6px 4px;color:var(--muted);font-size:.72rem;font-style:italic">'+s.original+'</td>'+
+          '<td style="padding:6px 4px;text-align:right;color:'+ptColor+';font-family:Playfair Display,serif;font-weight:700">'+ptDisplay+'</td>'+
+          '</tr>';
+      });
+      html+='</table>';
+    } else {
+      html+='<div style="font-size:.82rem;color:var(--muted);padding:.5rem 0">No songs played</div>';
+    }
+    html+='</div>';
   });
 
   el.innerHTML=html;
