@@ -297,8 +297,7 @@
   <div class="re-pts">+<span id="re-pts">0</span> pts</div>
   <div class="re-summary" id="re-summary"></div>
   <div id="re-songs" style="width:100%;display:none">
-    <div style="font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.5rem">Songs This Turn</div>
-    <div id="re-songs-list" style="display:flex;flex-direction:column;gap:5px"></div>
+    <div id="re-songs-list" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
   <div class="scoreboard" id="re-board"></div>
   <button class="continue-btn" id="next-turn-btn" onclick="nextTurn()">Next Team's Turn &#9654;</button>
@@ -414,613 +413,7 @@ const ADMIN_PASSWORD = 'utc2024';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_lW3D9rvYKuuM4pNfTE1pz7XMRJxndLp6Jiof4ZEJsJaWbYjrHKTn-7WrIrvtwwN8mQ/exec';
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 
-const DB=[
-  {t:"(Everything I Do) I Do It for You",c:"Brandy",o:"Bryan Adams"},
-  {t:"(I Can't Get No) Satisfaction",c:"Cat Power",o:"The Rolling Stones"},
-  {t:"(I Can't Help) Falling In Love With You",c:"UB40",o:"Neil Diamond"},
-  {t:"A Change Is Gonna Come",c:"Greta Van Fleet",o:"Sam Cooke"},
-  {t:"A Change Is Gonna Come",c:"The Neville Brothers",o:"Sam Cooke"},
-  {t:"A Hard Day's Night",c:"The Supremes",o:"The Beatles"},
-  {t:"A Pirate Looks At Forty",c:"Jack Johnson / Dave Matthews",o:"Jimmy Buffett"},
-  {t:"A Teenager in Love",c:"Red Hot Chili Peppers",o:"Dion DiMucci"},
-  {t:"Across the Universe",c:"Fiona Apple",o:"The Beatles"},
-  {t:"Across the Universe",c:"David Bowie",o:"The Beatles"},
-  {t:"Addicted To Love",c:"Florence + The Machine",o:"Robert Palmer"},
-  {t:"Africa",c:"Weezer",o:"Toto"},
-  {t:"After Midnight",c:"Eric Clapton",o:"JJ Cale"},
-  {t:"Ain't No Love In The Heart Of The City",c:"Black Pumas",o:"Bobby Bland"},
-  {t:"Ain't No Sunshine",c:"Buddy Guy / Tracy Chapman",o:"Bill Withers"},
-  {t:"All Along The Watchtower",c:"Jimi Hendrix",o:"Bob Dylan"},
-  {t:"All Apologies",c:"Sinéad O'Connor",o:"Nirvana"},
-  {t:"All Together Now",c:"André 3000",o:"The Beatles"},
-  {t:"American Woman",c:"Lenny Kravitz",o:"The Guess Who"},
-  {t:"Angel",c:"Shaggy / Rayvon",o:"Steve Miller"},
-  {t:"Angel From Montgomery",c:"Susan Tedeschi",o:"John Prine"},
-  {t:"Angel from Montgomery",c:"Bonnie Raitt",o:"John Prine"},
-  {t:"Atlantic City",c:"The Band",o:"Bruce Springsteen"},
-  {t:"Baby One More Time",c:"Ed Sheeran",o:"Britney Spears"},
-  {t:"Bad Company",c:"Bad Company / Charley Crockett",o:"Bad Company"},
-  {t:"Bad Romance",c:"Thirty Seconds To Mars",o:"Lady Gaga"},
-  {t:"Bang A Gong (Get It On)",c:"U2 / Elton John",o:"T. Rex"},
-  {t:"Beat It",c:"Fall Out Boy / John Mayer",o:"Michael Jackson"},
-  {t:"Behind Blue Eyes",c:"Limp Bizkit",o:"The Who"},
-  {t:"Bennie & The Jets",c:"BØRNS",o:"Elton John"},
-  {t:"Big Yellow Taxi",c:"Counting Crows / Vanessa Carlton",o:"Joni Mitchell"},
-  {t:"Billie Jean",c:"Chris Cornell",o:"Michael Jackson"},
-  {t:"Blackbird",c:"Sarah McLachlan",o:"The Beatles"},
-  {t:"Bohemian Rhapsody",c:"Panic! At The Disco",o:"Queen"},
-  {t:"Born This Way",c:"Orville Peck",o:"Lady Gaga"},
-  {t:"Breakdown",c:"Grace Jones",o:"Tom Petty"},
-  {t:"California Dreamin'",c:"Sia",o:"The Mamas & The Papas"},
-  {t:"California Dreamin'",c:"Bobby Womack",o:"The Mamas & The Papas"},
-  {t:"Can't Help Falling in Love",c:"Beck",o:"Elvis"},
-  {t:"Can't Take My Eyes Off of You",c:"Ms. Lauryn Hill",o:"Frankie Valli"},
-  {t:"Can't You See",c:"Waylon Jennings",o:"The Marshall Tucker Band"},
-  {t:"Candle In The Wind",c:"Ed Sheeran",o:"Elton John"},
-  {t:"Champagne Supernova",c:"OneRepublic",o:"Oasis"},
-  {t:"Come Together",c:"Soundgarden",o:"The Beatles"},
-  {t:"Come Together",c:"Michael Jackson",o:"The Beatles"},
-  {t:"Crazy",c:"Kacey Musgraves",o:"Gnarls Barkley"},
-  {t:"Crazy",c:"Violent Femmes",o:"Gnarls Barkley"},
-  {t:"Creep",c:"Brandi Carlile",o:"Radiohead"},
-  {t:"Dancing In The Dark",c:"Hot Chip",o:"Bruce Springsteen"},
-  {t:"Dancing In The Dark",c:"Benny Sings",o:"Bruce Springsteen"},
-  {t:"Dancing in the Moonlight",c:"alt-J",o:"Toploader"},
-  {t:"Dancing On My Own",c:"Elle Fanning",o:"Robyn"},
-  {t:"Dancing with Myself",c:"blink-182",o:"Billy Idol"},
-  {t:"Daniel",c:"Sam Smith",o:"Elton John"},
-  {t:"Day Tripper",c:"Jimi Hendrix",o:"The Beatles"},
-  {t:"Dead Flowers",c:"Townes Van Zandt",o:"The Rolling Stones"},
-  {t:"Dear Prudence",c:"Jerry Garcia",o:"The Beatles"},
-  {t:"Do You Really Want To Hurt Me",c:"Violent Femmes",o:"Culture Club"},
-  {t:"Doin' Time",c:"Lana Del Rey",o:"Sublime"},
-  {t:"Don't Let The Sun Go Down On Me",c:"Miley Cyrus",o:"Elton John"},
-  {t:"Don't Speak",c:"Carly Rae Jepsen",o:"No Doubt"},
-  {t:"Don't Think Twice, It's All Right",c:"Susan Tedeschi",o:"Bob Dylan"},
-  {t:"Don't You Want Me",c:"Bahamas / The Weather Station",o:"The Human League"},
-  {t:"Down On The Corner",c:"Bryan Adams",o:"Creedence Clearwater Revival"},
-  {t:"Dream A Little Dream",c:"Eddie Vedder",o:"The Beatles"},
-  {t:"Drive",c:"Aimee Mann",o:"Ella Fitzgerald / Louis Armstrong"},
-  {t:"Drops Of Jupiter",c:"Taylor Swift",o:"Train"},
-  {t:"Easy",c:"Faith No More",o:"Commodores"},
-  {t:"Eleanor Rigby",c:"Aretha Franklin",o:"The Beatles"},
-  {t:"Escape (The Pina Colada Song)",c:"Jack Johnson",o:"Rupert Holmes"},
-  {t:"Everybody Hurts",c:"Joe Cocker",o:"R.E.M."},
-  {t:"Everybody's Talkin'",c:"Iggy Pop",o:"Harry Nilsson"},
-  {t:"Faith",c:"Limp Bizkit",o:"George Michael"},
-  {t:"Fame",c:"Duran Duran",o:"David Bowie"},
-  {t:"Fast Car",c:"Black Pumas",o:"Tracy Chapman"},
-  {t:"Fast Car",c:"Luke Combs",o:"Tracy Chapman"},
-  {t:"Fever",c:"The Cramps",o:"Peggy Lee"},
-  {t:"Fire",c:"The Pointer Sisters",o:"Bruce Springsteen"},
-  {t:"Fix You",c:"Ben Harper / Soweto Gospel Choir",o:"Coldplay"},
-  {t:"Fix You",c:"Kacey Musgraves",o:"Coldplay"},
-  {t:"Fly Like an Eagle",c:"Seal",o:"Steve Miller Band"},
-  {t:"Fortunate Son",c:"Cat Power",o:"Creedence Clearwater Revival"},
-  {t:"Free Fallin'",c:"John Mayer",o:"Tom Petty"},
-  {t:"Fresh Prince of Bel-Air",c:"Neil Young",o:"Will Smith"},
-  {t:"Girl Crush",c:"Harry Styles",o:"Little Big Town"},
-  {t:"Girl, You'll Be a Woman Soon",c:"Urge Overkill",o:"Neil Diamond"},
-  {t:"Go Your Own Way",c:"The Cranberries",o:"Fleetwood Mac"},
-  {t:"Golden Slumbers",c:"Dua Lipa",o:"The Beatles"},
-  {t:"Goodbye Yellow Brick Road",c:"Sara Bareilles",o:"Elton John"},
-  {t:"Graceland",c:"Justin Townes Earle",o:"Paul Simon"},
-  {t:"Hallelujah",c:"Jeff Buckley",o:"Leonard Cohen"},
-  {t:"Hallelujah",c:"Rufus Wainwright",o:"Leonard Cohen"},
-  {t:"Hand In My Pocket",c:"Imagine Dragons",o:"Alanis Morissette"},
-  {t:"Hard To Handle",c:"The Black Crowes",o:"Otis Redding"},
-  {t:"Harvest Moon",c:"Poolside",o:"Neil Young"},
-  {t:"Harvest Moon",c:"Lord Huron",o:"Neil Young"},
-  {t:"Have You Ever Seen The Rain",c:"The Lumineers",o:"Creedence Clearwater Revival"},
-  {t:"Have You Ever Seen the Rain",c:"Johnny Cash",o:"Creedence Clearwater Revival"},
-  {t:"Heart Of Glass",c:"Miley Cyrus",o:"Blondie"},
-  {t:"Heart-Shaped Box",c:"Glass Animals",o:"Nirvana"},
-  {t:"Help!",c:"Oasis",o:"The Beatles"},
-  {t:"Here Comes The Rain Again",c:"Macy Gray",o:"Eurythmics"},
-  {t:"Here Comes The Sun",c:"Richie Havens",o:"The Beatles"},
-  {t:"Heroes",c:"Peter Gabriel",o:"David Bowie"},
-  {t:"Hey Jude",c:"Elvis Presley",o:"The Beatles"},
-  {t:"Hey Ya!",c:"Panic! At The Disco",o:"OutKast"},
-  {t:"Hey, Hey What Can I Do",c:"Hootie & The Blowfish",o:"Led Zeppelin"},
-  {t:"Higher Ground",c:"Red Hot Chili Peppers",o:"Stevie Wonder"},
-  {t:"Higher Love",c:"James Vincent McMorrow",o:"Steve Winwood"},
-  {t:"Higher Love",c:"Kygo / Whitney Houston",o:"Steve Winwood"},
-  {t:"Hold On, We're Going Home",c:"Lykke Li",o:"Drake"},
-  {t:"Hotel California",c:"Gipsy Kings",o:"Eagles"},
-  {t:"House of the Rising Sun",c:"The White Buffalo",o:"The Animals"},
-  {t:"How You Remind Me",c:"Avril Lavigne",o:"Nickelback"},
-  {t:"Hurt",c:"Johnny Cash",o:"Nine Inch Nails"},
-  {t:"I Can't Make U Love Me",c:"Prince",o:"George Michael"},
-  {t:"I Get Around",c:"Red Hot Chili Peppers",o:"The Beach Boys"},
-  {t:"I Got You Babe",c:"UB40 / Chrissie Hynde",o:"Sonny & Cher"},
-  {t:"I Got You Babe",c:"Etta James",o:"Sonny & Cher"},
-  {t:"I Got You Babe",c:"Bahamas",o:"Sonny & Cher"},
-  {t:"I Heard It Through The Grapevine",c:"Creedence Clearwater Revival",o:"Marvin Gaye"},
-  {t:"I Heard It Through the Grapevine",c:"Ella Fitzgerald",o:"Marvin Gaye"},
-  {t:"I Just Called to Say I Love You",c:"John Prine / The Secret Sisters",o:"Stevie Wonder"},
-  {t:"I Shall Be Released",c:"The Band",o:"Bob Dylan / The Band"},
-  {t:"I Think We're Alone Now",c:"Billie Joe Armstrong / Green Day",o:"Tommy James & The Shondells"},
-  {t:"I Think We're Alone Now",c:"Tiffany",o:"Tommy James & The Shondells"},
-  {t:"I Wanna Dance With Somebody (Who Loves Me)",c:"Fall Out Boy",o:"Whitney Houston"},
-  {t:"I Want To Know What Love Is",c:"Clay Aiken / Suzie McNeil",o:"Foreigner"},
-  {t:"I Was Made For Lovin' You",c:"YUNGBLUD",o:"Kiss"},
-  {t:"I Will Always Love You",c:"Whitney Houston",o:"Dolly Parton"},
-  {t:"I Will Survive",c:"CAKE",o:"Gloria Gaynor"},
-  {t:"I Won't Back Down",c:"Johnny Cash",o:"Tom Petty"},
-  {t:"I'd Rather Go Blind",c:"Dua Lipa",o:"Etta James"},
-  {t:"I'm Goin' Down",c:"Vampire Weekend",o:"Bruce Springsteen"},
-  {t:"I'm Not the Only One",c:"Dua Lipa",o:"Sam Smith"},
-  {t:"I'm On Fire",c:"Chromatics",o:"Bruce Springsteen"},
-  {t:"I'm On Fire",c:"Shakey Graves",o:"Bruce Springsteen"},
-  {t:"I'm On Fire",c:"AWOLNATION",o:"Bruce Springsteen"},
-  {t:"If I Ain't Got You",c:"Maroon 5",o:"Alicia Keys"},
-  {t:"If I Fell",c:"Maroon 5",o:"The Beatles"},
-  {t:"If Not for You",c:"George Harrison",o:"Bob Dylan"},
-  {t:"Imagine",c:"Avril Lavigne",o:"John Lennon"},
-  {t:"Immigrant Song",c:"Trent Reznor / Karen O",o:"Led Zeppelin"},
-  {t:"In Bloom",c:"Sturgill Simpson",o:"Nirvana"},
-  {t:"In My Life",c:"Ozzy Osbourne",o:"John Lennon"},
-  {t:"In My Life",c:"Johnny Cash",o:"John Lennon"},
-  {t:"Instant Karma",c:"U2",o:"John Lennon"},
-  {t:"Into The Black",c:"Chromatics",o:"Neil Young"},
-  {t:"Into the Mystic",c:"Gretchen Wilson",o:"Van Morrison"},
-  {t:"It Ain't Me Babe",c:"Johnny Cash",o:"Bob Dylan"},
-  {t:"Jealous Guy",c:"The Weeknd",o:"John Lennon"},
-  {t:"Jealous Guy",c:"Donny Hathaway",o:"John Lennon"},
-  {t:"Johnny B Goode",c:"The Beatles",o:"Chuck Berry"},
-  {t:"Jolene",c:"The White Stripes",o:"Dolly Parton"},
-  {t:"Jolene",c:"Zac Brown Band",o:"Ray La Montagne"},
-  {t:"JOLENE",c:"Beyoncé",o:"Dolly Parton"},
-  {t:"Just Breathe",c:"Willie Nelson / Lukas Nelson",o:"Eddie Vedder / Pearl Jam"},
-  {t:"just like heaven",c:"The Lumineers",o:"The Cure"},
-  {t:"Just My Imagination (Running Away With Me)",c:"The Rolling Stones",o:"The Temptations"},
-  {t:"Killing Me Softly With His Song",c:"Fugees / Ms. Lauryn Hill",o:"Roberta Flack"},
-  {t:"King of Pain",c:"Alanis Morissette",o:"The Police"},
-  {t:"Kiss",c:"Kelly Clarkson",o:"Prince"},
-  {t:"Knockin' On Heaven's Door",c:"Guns N' Roses",o:"Bob Dylan"},
-  {t:"Kung Fu Fighting",c:"CeeLo Green",o:"Carl Douglas"},
-  {t:"Landslide",c:"The Smashing Pumpkins",o:"Fleetwood Mac"},
-  {t:"Landslide",c:"The Chicks",o:"Fleetwood Mac"},
-  {t:"Let's Go Crazy",c:"Incubus",o:"Prince"},
-  {t:"Light My Fire",c:"José Feliciano",o:"The Doors"},
-  {t:"Like a Virgin",c:"Mötley Crüe",o:"Madonna"},
-  {t:"Live And Let Die",c:"Guns N' Roses",o:"Paul McCartney"},
-  {t:"Long, Long Time",c:"Jerry Jeff Walker",o:"Linda Ronstadt"},
-  {t:"Love Is Blindness",c:"Jack White",o:"U2"},
-  {t:"Love On The Brain",c:"Cold War Kids / Bishop Briggs",o:"Rihanna"},
-  {t:"Love Song",c:"311",o:"The Cure"},
-  {t:"Loving Cup",c:"Phish",o:"The Rolling Stones"},
-  {t:"Many Rivers To Cross",c:"Joe Cocker",o:"Jimmy Cliff"},
-  {t:"Message In a Bottle",c:"John Mayer",o:"The Police"},
-  {t:"Midnight Rider",c:"Train",o:"The Allman Brothers Band"},
-  {t:"Mood Indigo",c:"Frank Sinatra",o:"Duke Ellington"},
-  {t:"Mr. Tambourine Man",c:"Stevie Wonder",o:"Bob Dylan"},
-  {t:"Mrs. Robinson",c:"The Lemonheads",o:"Simon & Garfunkel"},
-  {t:"My Prerogative",c:"Britney Spears",o:"Bobby Brown"},
-  {t:"My Sweet Lord",c:"Jim James",o:"George Harrison"},
-  {t:"Never Been to Spain",c:"Waylon Jennings",o:"Three Dog Night"},
-  {t:"Never Tear Us Apart",c:"The National",o:"INXS"},
-  {t:"New York",c:"Cat Power",o:"Frank Sinatra"},
-  {t:"No Diggity",c:"Chet Faker",o:"Blackstreet"},
-  {t:"No Diggity",c:"Nick Murphy",o:"Blackstreet"},
-  {t:"No One",c:"Cold War Kids",o:"Alicia Keys"},
-  {t:"No Surprises",c:"Jeremiah Fraites / Gregory Alan Isakov",o:"Radiohead"},
-  {t:"Nothing Compares 2 U",c:"Chris Cornell",o:"Prince"},
-  {t:"Nothing Compares 2 U",c:"Sinéad O'Connor",o:"Prince"},
-  {t:"Nothing Else Matters",c:"My Morning Jacket",o:"Metallica"},
-  {t:"Nothing Else Matters",c:"Chris Stapleton",o:"Metallica"},
-  {t:"One",c:"Joe Cocker",o:"U2"},
-  {t:"One More Try",c:"LeAnn Rimes",o:"George Michael"},
-  {t:"Only Wanna Be With You",c:"Post Malone",o:"Hootie & The Blowfish"},
-  {t:"Pale Blue Eyes",c:"R.E.M.",o:"The Velvet Underground"},
-  {t:"Patience",c:"Chris Cornell",o:"Guns N' Roses"},
-  {t:"Peggy Sue",c:"John Lennon",o:"Buddy Holly"},
-  {t:"People Get Ready",c:"Jeff Beck / Rod Stewart",o:"Curtis Mayfield"},
-  {t:"Personal Jesus",c:"Johnny Cash",o:"Depeche Mode"},
-  {t:"Personal Jesus",c:"Def Leppard",o:"Depeche Mode"},
-  {t:"Please Mister Postman",c:"The Beatles",o:"The Carpenters"},
-  {t:"Pony",c:"Leon Bridges",o:"Ginuwine"},
-  {t:"Proud Mary",c:"Tina Turner",o:"Creedence Clearwater Revival"},
-  {t:"Proud Mary",c:"Ike & Tina Turner",o:"Creedence Clearwater Revival"},
-  {t:"Purple Rain",c:"Dwight Yoakam",o:"Prince"},
-  {t:"Red Red Wine",c:"UB40",o:"Neil Diamond"},
-  {t:"Redemption Song",c:"Johnny Cash / Joe Strummer",o:"Bob Marley"},
-  {t:"Respect",c:"Aretha Franklin",o:"Otis Redding"},
-  {t:"Respect",c:"Kelly Clarkson",o:"Otis Redding"},
-  {t:"Rich Girl",c:"Nina Simone",o:"Hall & Oates"},
-  {t:"Rocket Man",c:"My Morning Jacket",o:"Elton John"},
-  {t:"Rolling In The Deep",c:"Greta Van Fleet",o:"Adele"},
-  {t:"Romeo And Juliet",c:"The Killers",o:"Dire Straits"},
-  {t:"Roxanne",c:"George Michael",o:"The Police"},
-  {t:"Running Up That Hill",c:"Chromatics",o:"Kate Bush"},
-  {t:"Saturday Night's Alright (For Fighting)",c:"Nickelback",o:"Elton John"},
-  {t:"Save It For Later",c:"Eddie Vedder",o:"The English Beat"},
-  {t:"Say My Name",c:"Hozier",o:"Destiny's Child"},
-  {t:"September",c:"Taylor Swift",o:"Earth, Wind & Fire"},
-  {t:"Sex And Candy",c:"Maroon 5",o:"Marcy Playground"},
-  {t:"Sexual Healing",c:"Hot Chip",o:"Marvin Gaye"},
-  {t:"Shake It Off",c:"Ryan Adams",o:"Taylor Swift"},
-  {t:"Shakedown Street",c:"Poolside",o:"Grateful Dead"},
-  {t:"Signed Sealed Delivered",c:"Elton John",o:"Stevie Wonder"},
-  {t:"Signed, Sealed, Delivered (I'm Yours)",c:"Rufus Wainwright",o:"Stevie Wonder"},
-  {t:"Smalltown Boy",c:"Orville Peck",o:"Bronski Beat"},
-  {t:"Smells Like Teen Spirit",c:"Tori Amos",o:"Nirvana"},
-  {t:"Smells Like Teen Spirit",c:"Patti Smith",o:"Nirvana"},
-  {t:"Smooth Criminal",c:"Alien Ant Farm",o:"Michael Jackson"},
-  {t:"Sneakin' Sally Thru The Alley",c:"Phish",o:"Robert Palmer"},
-  {t:"Something",c:"Norah Jones",o:"George Harrison"},
-  {t:"Somewhere Only We Know",c:"Lily Allen",o:"Keane"},
-  {t:"Space Oddity",c:"Natalie Merchant",o:"David Bowie"},
-  {t:"Spirit In The Sky",c:"Elton John",o:"Norman Greenbaum"},
-  {t:"Stand By Me",c:"Florence + The Machine",o:"Ben E. King"},
-  {t:"Stand By Me",c:"John Lennon",o:"Ben E. King"},
-  {t:"Stay",c:"Thirty Seconds To Mars",o:"Rihanna"},
-  {t:"Stay",c:"Cat Power",o:"Rihanna"},
-  {t:"Stay With Me",c:"The Temptations",o:"Sam Smith"},
-  {t:"Strange Overtones",c:"Poolside",o:"David Byrne"},
-  {t:"Strawberry Fields Forever",c:"Richie Havens",o:"The Beatles"},
-  {t:"Strawberry Fields Forever",c:"Ben Harper",o:"The Beatles"},
-  {t:"Streets of Philadelphia",c:"Waxahatchee",o:"Bruce Springsteen"},
-  {t:"Suzanne",c:"Nina Simone",o:"Leonard Cohen"},
-  {t:"Sweet Child O' Mine",c:"Sheryl Crow",o:"Guns N' Roses"},
-  {t:"Sweet Jane",c:"Cowboy Junkies",o:"Lou Reed"},
-  {t:"Tainted Love",c:"Marilyn Manson",o:"Soft Cell"},
-  {t:"Tainted Love",c:"Milky Chance",o:"Soft Cell"},
-  {t:"Take Me Home, Country Roads",c:"Toots & The Maytals",o:"John Denver"},
-  {t:"Take Me Home, Country Roads",c:"Lana Del Rey",o:"John Denver"},
-  {t:"Take Me to the River",c:"Talking Heads",o:"Al Green"},
-  {t:"Take My Breath Away",c:"My Morning Jacket",o:"Berlin"},
-  {t:"Take The Money And Run",c:"Run–D.M.C. / Everlast",o:"Steve Miller Band"},
-  {t:"Tempted",c:"Erykah Badu / James Poyser",o:"Squeeze"},
-  {t:"Tennessee Whiskey",c:"Chris Stapleton",o:"David Allen Coe"},
-  {t:"That Don't Impress Me Much",c:"HAIM",o:"Shania Twain"},
-  {t:"The Boxer",c:"Mumford & Sons",o:"Paul Simon"},
-  {t:"The Chain",c:"José Feliciano",o:"Fleetwood Mac"},
-  {t:"The First Cut Is the Deepest",c:"Rod Stewart",o:"Cat Stevens"},
-  {t:"The First Cut Is The Deepest",c:"Sheryl Crow",o:"Cat Stevens"},
-  {t:"The First Time Ever I Saw Your Face",c:"James Blake",o:"Roberta Flack"},
-  {t:"The Man Who Sold The World",c:"Nirvana",o:"David Bowie"},
-  {t:"The Promise",c:"Sturgill Simpson",o:"When in Rome"},
-  {t:"The Sound of Silence",c:"Disturbed",o:"Simon & Garfunkel"},
-  {t:"The Way You Do The Things You Do",c:"Jerry Garcia Band",o:"The Temptations"},
-  {t:"The Weight",c:"Aretha Franklin",o:"The Band"},
-  {t:"Tiny Dancer",c:"Florence + The Machine",o:"Elton John"},
-  {t:"Tonight, Tonight",c:"Passion Pit",o:"The Smashing Pumpkins"},
-  {t:"Toxic",c:"Mark Ronson",o:"Britney Spears"},
-  {t:"Travelin' Band",c:"Elton John",o:"Creedence Clearwater Revival"},
-  {t:"Turn The Page",c:"Metallica",o:"Bob Seger"},
-  {t:"Two of Us",c:"Aimee Mann",o:"The Beatles"},
-  {t:"Unchained Melody",c:"Norah Jones",o:"Righteous Brothers"},
-  {t:"Under Pressure",c:"Karen O / Willie Nelson",o:"David Bowie / Queen"},
-  {t:"Unknown Legend",c:"Shovels & Rope / Shakey Graves",o:"Neil Young"},
-  {t:"Use Somebody",c:"Shawn Mendes",o:"Kings Of Leon"},
-  {t:"Use Your Love",c:"Katy Perry",o:"The Outfield"},
-  {t:"Waitin' 'Round to Die",c:"Whitey Morgan and the 78's",o:"Townes Van Zandt"},
-  {t:"Waiting Around to Die",c:"Michael Kiwanuka",o:"Townes Van Zandt"},
-  {t:"Waste",c:"Dave Matthews",o:"Phish"},
-  {t:"Watching The Wheels",c:"Aloe Blacc",o:"John Lennon"},
-  {t:"Waterfalls",c:"Death Cab for Cutie",o:"TLC"},
-  {t:"We Can Work It Out",c:"Stevie Wonder",o:"The Beatles"},
-  {t:"We Will Rock You",c:"Nickelback",o:"Queen"},
-  {t:"What The World Needs Now",c:"Cat Power",o:"Burt Bacharach"},
-  {t:"What's Going On",c:"John Legend",o:"Marvin Gaye"},
-  {t:"What's Going On",c:"U2",o:"Marvin Gaye"},
-  {t:"When Doves Cry",c:"Patti Smith",o:"Prince"},
-  {t:"Whole Lotta Love",c:"Santana / Chris Cornell",o:"Led Zeppelin"},
-  {t:"Wicked Game",c:"Céline Dion / Chris Isaak",o:"Chris Isaak"},
-  {t:"Wildflowers",c:"Miley Cyrus",o:"Tom Petty"},
-  {t:"Wish You Were Here",c:"Cody Jinks",o:"Pink Floyd"},
-  {t:"With a Little Help from My Friends",c:"Joe Cocker",o:"The Beatles"},
-  {t:"Wonderwall",c:"Ryan Adams",o:"Oasis"},
-  {t:"Word Up!",c:"Korn",o:"Cameo"},
-  {t:"You Are The Sunshine Of My Life",c:"Jack White",o:"Stevie Wonder"},
-  {t:"You Can't Always Get What You Want",c:"Rusted Root",o:"The Rolling Stones"},
-  {t:"You're All I've Got Tonight",c:"The Smashing Pumpkins",o:"The Cars"},
-  {t:"Zombie",c:"Miley Cyrus",o:"The Cranberries"},
-];
 
-const TRACKS = [
-  {t:"Purple Rain",c:"Dwight Yoakam",o:"Prince",uri:"spotify:track:6eo04yKCNmMegAvdQPEhm8"},
-  {t:"Into The Black",c:"Chromatics",o:"Neil Young",uri:"spotify:track:6NQfUZb5VummNR8rozb8Ic"},
-  {t:"Ain't No Love In The Heart Of The City",c:"Black Pumas",o:"Bobby Bland",uri:"spotify:track:7scVLMa5I62SAMmbZnF5wI"},
-  {t:"One",c:"Joe Cocker",o:"U2",uri:"spotify:track:6kICkyQsOD3KvGRDfUsehw"},
-  {t:"Here Comes The Sun",c:"Richie Havens",o:"The Beatles",uri:"spotify:track:0hhzJEusz6r7f0eL1Uc8kw"},
-  {t:"My Sweet Lord",c:"Jim James",o:"George Harrison",uri:"spotify:track:6k1clpTZEaUIdpt7yVupFs"},
-  {t:"Graceland",c:"Justin Townes Earle",o:"Paul Simon",uri:"spotify:track:2UduNMj9tpsEcBTur8VwH2"},
-  {t:"Fast Car",c:"Black Pumas",o:"Tracy Chapman",uri:"spotify:track:4v4hTn4ojuhMurbBzRnbqa"},
-  {t:"Escape (The Pina Colada Song)",c:"Jack Johnson",o:"Rupert Holmes",uri:"spotify:track:3dnswoe0E6Rf1vKdKzNdKs"},
-  {t:"You Can't Always Get What You Want",c:"Rusted Root",o:"The Rolling Stones",uri:"spotify:track:6UHbDgxRd8mPzugNInBx3y"},
-  {t:"Loving Cup",c:"Phish",o:"The Rolling Stones",uri:"spotify:track:2KBwelELj648tNPvhIyEGp"},
-  {t:"Killing Me Softly With His Song",c:"Fugees / Ms. Lauryn Hill",o:"Roberta Flack",uri:"spotify:track:0Q0IVlqMV64kNLlwjPj0Hl"},
-  {t:"Don't Think Twice, It's All Right",c:"Susan Tedeschi",o:"Bob Dylan",uri:"spotify:track:7eG1BnCa7VYmbNM5uMuCRN"},
-  {t:"Goodbye Yellow Brick Road",c:"Sara Bareilles",o:"Elton John",uri:"spotify:track:5Qt6ireK9HgLNTQHQswq6H"},
-  {t:"The Way You Do The Things You Do",c:"Jerry Garcia Band",o:"The Temptations",uri:"spotify:track:3WiLOtxlGAxZtEfKtQynNT"},
-  {t:"Bennie & The Jets",c:"BØRNS",o:"Elton John",uri:"spotify:track:4f2aupm9UaR6Zqknh3Ph8W"},
-  {t:"Sneakin' Sally Thru The Alley",c:"Phish",o:"Robert Palmer",uri:"spotify:track:0gpM7wJsLuZukHR2KqOlbB"},
-  {t:"Hey, Hey What Can I Do",c:"Hootie & The Blowfish",o:"Led Zeppelin",uri:"spotify:track:5tv2Xb1s1CyeM5VbLyavCC"},
-  {t:"Ain't No Sunshine",c:"Buddy Guy / Tracy Chapman",o:"Bill Withers",uri:"spotify:track:1amH1FjaNDAaZVpHWzcztW"},
-  {t:"I'd Rather Go Blind",c:"Dua Lipa",o:"Etta James",uri:"spotify:track:5nMkd5cq4JPZqAoQTXv8Wm"},
-  {t:"Patience",c:"Chris Cornell",o:"Guns N' Roses",uri:"spotify:track:7n3u7RrzdXGVcclBEp9aSa"},
-  {t:"Stay",c:"Thirty Seconds To Mars",o:"Rihanna",uri:"spotify:track:78vpAeb6a3bD03scfv71Z8"},
-  {t:"Creep",c:"Brandi Carlile",o:"Radiohead",uri:"spotify:track:57BUJmnfSiPJ0V76Bq6MGB"},
-  {t:"A Teenager in Love",c:"Red Hot Chili Peppers",o:"Dion DiMucci",uri:"spotify:track:5kuvOXaO2WiHwES81fSeu3"},
-  {t:"Here Comes The Rain Again",c:"Macy Gray",o:"Eurythmics",uri:"spotify:track:1jZE6f2b7IWlkCYtzqm1zk"},
-  {t:"Daniel",c:"Sam Smith",o:"Elton John",uri:"spotify:track:7w0CSwfUCZ0oYfEJxq7nxL"},
-  {t:"Nothing Compares 2 U",c:"Chris Cornell",o:"Prince",uri:"spotify:track:0tUELgOuOJ3KCsYMDDsNvD"},
-  {t:"Take Me Home, Country Roads",c:"Toots & The Maytals",o:"John Denver",uri:"spotify:track:389R9arpxdfl0JA450Qn9m"},
-  {t:"Strawberry Fields Forever",c:"Richie Havens",o:"The Beatles",uri:"spotify:track:37HFYXBM6Hb2EcoOXVMqy7"},
-  {t:"Tennessee Whiskey",c:"Chris Stapleton",o:"David Allen Coe",uri:"spotify:track:3fqwjXwUGN6vbzIwvyFMhx"},
-  {t:"Higher Love",c:"James Vincent McMorrow",o:"Steve Winwood",uri:"spotify:track:5ita5p8yV0UbQNuCXNZQgM"},
-  {t:"Rocket Man",c:"My Morning Jacket",o:"Elton John",uri:"spotify:track:03auri1kCcQxFDvU3yoD3E"},
-  {t:"Hey Jude",c:"Elvis Presley",o:"The Beatles",uri:"spotify:track:3tNyFKxcFszV0TiDDJsYVx"},
-  {t:"Harvest Moon",c:"Poolside",o:"Neil Young",uri:"spotify:track:4r608qFvEK55vdNyOPtnwf"},
-  {t:"In Bloom",c:"Sturgill Simpson",o:"Nirvana",uri:"spotify:track:5StrN0F4XI5e0BHP32THhl"},
-  {t:"Strange Overtones",c:"Poolside",o:"David Byrne",uri:"spotify:track:6dOnTK9bgYLUyFgnymmQ8S"},
-  {t:"Stand By Me",c:"Florence + The Machine",o:"Ben E. King",uri:"spotify:track:5XSU59wtE5CRCAEyHmmGy4"},
-  {t:"Heroes",c:"Peter Gabriel",o:"David Bowie",uri:"spotify:track:2Os83Fjr9ixsIRLMiaGCnj"},
-  {t:"All Apologies",c:"Sinéad O'Connor",o:"Nirvana",uri:"spotify:track:1SquBBWJ2qIUAt6GiKZpsq"},
-  {t:"I Just Called to Say I Love You",c:"John Prine / The Secret Sisters",o:"Stevie Wonder",uri:"spotify:track:605rBHHOx8pF5kCEC2RDag"},
-  {t:"Addicted To Love",c:"Florence + The Machine",o:"Robert Palmer",uri:"spotify:track:3fNuoybebaufvtFBo5TDWO"},
-  {t:"King of Pain",c:"Alanis Morissette",o:"The Police",uri:"spotify:track:1oVnIYWKugITYu99VMguwr"},
-  {t:"I Want To Know What Love Is",c:"Clay Aiken / Suzie McNeil",o:"Foreigner",uri:"spotify:track:7aFxVYEvzdGNMi5mFbbJB2"},
-  {t:"Knockin' On Heaven's Door",c:"Guns N' Roses",o:"Bob Dylan",uri:"spotify:track:4JiEyzf0Md7KEFFGWDDdCr"},
-  {t:"Candle In The Wind",c:"Ed Sheeran",o:"Elton John",uri:"spotify:track:73TXMz1i41sGfOuDg8gH4L"},
-  {t:"Golden Slumbers",c:"Dua Lipa",o:"The Beatles",uri:"spotify:track:1cqXa5zVzhrrIm7QyQD1as"},
-  {t:"Don't You Want Me",c:"Bahamas / The Weather Station",o:"The Human League",uri:"spotify:track:6gREYnl1rgTBE06YIDZheT"},
-  {t:"Fortunate Son",c:"Cat Power",o:"Creedence Clearwater Revival",uri:"spotify:track:1YK3xueKx2pbrFz72Y45u6"},
-  {t:"Personal Jesus",c:"Johnny Cash",o:"Depeche Mode",uri:"spotify:track:0oMI7r4qbvmzEaM00kml8C"},
-  {t:"Easy",c:"Faith No More",o:"Commodores",uri:"spotify:track:1FVcSVHgSiNHwiOh4wLawP"},
-  {t:"Hallelujah",c:"Jeff Buckley",o:"Leonard Cohen",uri:"spotify:track:5qv0ohJV2QNwga79jLNDYQ"},
-  {t:"Immigrant Song",c:"Trent Reznor / Karen O",o:"Led Zeppelin",uri:"spotify:track:3g5kQgKEllNBUklsmARGg8"},
-  {t:"Billie Jean",c:"Chris Cornell",o:"Michael Jackson",uri:"spotify:track:5le0k7yvbMCHH2Xa1tEpAL"},
-  {t:"Girl, You'll Be a Woman Soon",c:"Urge Overkill",o:"Neil Diamond",uri:"spotify:track:7xmW8gsZgihBHkjHA3U8l7"},
-  {t:"All Along The Watchtower",c:"Jimi Hendrix",o:"Bob Dylan",uri:"spotify:track:0GuQcX8wTe8bUZ72ZncR7m"},
-  {t:"With a Little Help from My Friends",c:"Joe Cocker",o:"The Beatles",uri:"spotify:track:2vvwBjUBTQWZMIum68CPWx"},
-  {t:"Landslide",c:"The Smashing Pumpkins",o:"Fleetwood Mac",uri:"spotify:track:46jNNisjr8iE3jkNtrtWFl"},
-  {t:"Landslide",c:"The Chicks",o:"Fleetwood Mac",uri:"spotify:track:5hviCr3lgg6LY6noG6DPKs"},
-  {t:"Toxic",c:"Mark Ronson",o:"Britney Spears",uri:"spotify:track:0rJTwWY2IKaEV4TwOoo7Ia"},
-  {t:"Tainted Love",c:"Marilyn Manson",o:"Soft Cell",uri:"spotify:track:1ANc3O9jWyP6B9f4WQkiad"},
-  {t:"Wonderwall",c:"Ryan Adams",o:"Oasis",uri:"spotify:track:2lalKR44160J5XES081W9R"},
-  {t:"Red Red Wine",c:"UB40",o:"Neil Diamond",uri:"spotify:track:4uOKFydzAejjSFqYbv1XPt"},
-  {t:"I Heard It Through The Grapevine",c:"Creedence Clearwater Revival",o:"Marvin Gaye",uri:"spotify:track:02gIQlGYI0KVK87Uo9Ekjj"},
-  {t:"Can't Help Falling in Love",c:"Beck",o:"Elvis",uri:"spotify:track:5b9zmzULkkNBIhntA4cHBx"},
-  {t:"(I Can't Get No) Satisfaction",c:"Cat Power",o:"The Rolling Stones",uri:"spotify:track:4v2laH2faHbBeDumWMLHIZ"},
-  {t:"Sexual Healing",c:"Hot Chip",o:"Marvin Gaye",uri:"spotify:track:4o00TPFh7RiGPoqeJbMEpP"},
-  {t:"Crazy",c:"Kacey Musgraves",o:"Gnarls Barkley",uri:"spotify:track:3cHE6wRhtaV6O7lp4BRnA4"},
-  {t:"Can't You See",c:"Waylon Jennings",o:"The Marshall Tucker Band",uri:"spotify:track:3vGB7pK6KJaspU73i1M30n"},
-  {t:"Girl Crush",c:"Harry Styles",o:"Little Big Town",uri:"spotify:track:4YutJsNwBBInE8vemufpQ8"},
-  {t:"Have You Ever Seen The Rain",c:"The Lumineers",o:"Creedence Clearwater Revival",uri:"spotify:track:1iZdFYJujH9VZtj7c0Xw2y"},
-  {t:"A Pirate Looks At Forty",c:"Jack Johnson / Dave Matthews",o:"Jimmy Buffett",uri:"spotify:track:3P3Rj89T4jl2QczwR3TMRr"},
-  {t:"Love Song",c:"311",o:"The Cure",uri:"spotify:track:3mtukCAgd0mE260QcBfXAX"},
-  {t:"I Will Survive",c:"CAKE",o:"Gloria Gaynor",uri:"spotify:track:0qgiFuYhYuwtFXEwYakddE"},
-  {t:"Imagine",c:"Avril Lavigne",o:"John Lennon",uri:"spotify:track:0VgDSbOTRMgvtUc1bYges8"},
-  {t:"Instant Karma",c:"U2",o:"John Lennon",uri:"spotify:track:0uQ8ai2RWkf6pPS4GSIO73"},
-  {t:"Smooth Criminal",c:"Alien Ant Farm",o:"Michael Jackson",uri:"spotify:track:2T3blUc9Jnui2a0ZhuNOag"},
-  {t:"Hurt",c:"Johnny Cash",o:"Nine Inch Nails",uri:"spotify:track:2pDXMhXlzg67zhXKZVlefy"},
-  {t:"Bad Romance",c:"Thirty Seconds To Mars",o:"Lady Gaga",uri:"spotify:track:6FOkXQQZgwjW2PpHxkTuyv"},
-  {t:"Higher Ground",c:"Red Hot Chili Peppers",o:"Stevie Wonder",uri:"spotify:track:5arVt2Wg0zbiWwAOZef2Nl"},
-  {t:"Live And Let Die",c:"Guns N' Roses",o:"Paul McCartney",uri:"spotify:track:04MNKrAnzrHDUzuXAtNoLr"},
-  {t:"Faith",c:"Limp Bizkit",o:"George Michael",uri:"spotify:track:3R9B4XUKlqZ1Thh7OFD6ck"},
-  {t:"Whole Lotta Love",c:"Santana / Chris Cornell",o:"Led Zeppelin",uri:"spotify:track:0u6lRvvxbrAYEdkUFKmHp6"},
-  {t:"How You Remind Me",c:"Avril Lavigne",o:"Nickelback",uri:"spotify:track:00tB8c71eTcG5jV7PhuF4Q"},
-  {t:"I'm Not the Only One",c:"Dua Lipa",o:"Sam Smith",uri:"spotify:track:7wIYDzWW82O6Rc4vGuzjND"},
-  {t:"Hand In My Pocket",c:"Imagine Dragons",o:"Alanis Morissette",uri:"spotify:track:3P2I45r2nyahA9vZS6SQGT"},
-  {t:"Jolene",c:"The White Stripes",o:"Dolly Parton",uri:"spotify:track:2KWgKzzwFrPPZYkLNJy6qF"},
-  {t:"Tiny Dancer",c:"Florence + The Machine",o:"Elton John",uri:"spotify:track:69sJBJdGogAYV74hmB0ORK"},
-  {t:"If I Ain't Got You",c:"Maroon 5",o:"Alicia Keys",uri:"spotify:track:0SUIDQChUyNkU9JmC1otEw"},
-  {t:"Dream A Little Dream",c:"Eddie Vedder",o:"The Beatles",uri:"spotify:track:12echR1j6gj17Y6t98HdSl"},
-  {t:"California Dreamin'",c:"Sia",o:"The Mamas & The Papas",uri:"spotify:track:2Zw1UciFQWTbyMLSVJjdWX"},
-  {t:"Drive",c:"Aimee Mann",o:"Ella Fitzgerald / Louis Armstrong",uri:"spotify:track:6X7O5GPtUv88dZc8TZsuoX"},
-  {t:"Kiss",c:"Kelly Clarkson",o:"Prince",uri:"spotify:track:7Kfpow0FQwvw3xxrRdXgf9"},
-  {t:"Love On The Brain",c:"Cold War Kids / Bishop Briggs",o:"Rihanna",uri:"spotify:track:7ILFkuRdWNomYgG6QNhtSv"},
-  {t:"Proud Mary",c:"Tina Turner",o:"Creedence Clearwater Revival",uri:"spotify:track:6gJdDnF2TzfA1WPMXuCa3x"},
-  {t:"Dancing On My Own",c:"Elle Fanning",o:"Robyn",uri:"spotify:track:4quXaOhBoHdeHSGnpN5blS"},
-  {t:"Use Somebody",c:"Shawn Mendes",o:"Kings Of Leon",uri:"spotify:track:5My4LtZW8JQJoKFDWodqIt"},
-  {t:"Take My Breath Away",c:"My Morning Jacket",o:"Berlin",uri:"spotify:track:6cLPaqcG392d7zGvK2T4zX"},
-  {t:"I Will Always Love You",c:"Whitney Houston",o:"Dolly Parton",uri:"spotify:track:4eHbdreAnSOrDDsFfc4Fpm"},
-  {t:"Can't Take My Eyes Off of You",c:"Ms. Lauryn Hill",o:"Frankie Valli",uri:"spotify:track:2GFExyKXf9383tSRSrEHEt"},
-  {t:"My Prerogative",c:"Britney Spears",o:"Bobby Brown",uri:"spotify:track:2JxftzENN2rhpXxnOmtQBR"},
-  {t:"New York",c:"Cat Power",o:"Frank Sinatra",uri:"spotify:track:4dksbqpghucfzyXY19ggG3"},
-  {t:"Never Tear Us Apart",c:"The National",o:"INXS",uri:"spotify:track:6ApsMLGIa9zw446CrqxcEi"},
-  {t:"Under Pressure",c:"Karen O / Willie Nelson",o:"David Bowie / Queen",uri:"spotify:track:7rtNxSatiqmLKb4G71k1yn"},
-  {t:"All Together Now",c:"André 3000",o:"The Beatles",uri:"spotify:track:0O84vcg38upuklnJxLFUjD"},
-  {t:"Angel From Montgomery",c:"Susan Tedeschi",o:"John Prine",uri:"spotify:track:5TiuWTxFfIkmKcHJ6f4IjC"},
-  {t:"Never Been to Spain",c:"Waylon Jennings",o:"Three Dog Night",uri:"spotify:track:13OK3ZOupPmDYN0sPTYSae"},
-  {t:"Watching The Wheels",c:"Aloe Blacc",o:"John Lennon",uri:"spotify:track:3WDhgg3WBESB2PZLJ4UcpE"},
-  {t:"I'm On Fire",c:"Chromatics",o:"Bruce Springsteen",uri:"spotify:track:363GylESVIJoHE7MUB4mmp"},
-  {t:"Say My Name",c:"Hozier",o:"Destiny's Child",uri:"spotify:track:2xbuycY0MolcTZGENc4PuK"},
-  {t:"Fix You",c:"Ben Harper / Soweto Gospel Choir",o:"Coldplay",uri:"spotify:track:7wyjYCzCk2SW9AhPgY9tPL"},
-  {t:"The Promise",c:"Sturgill Simpson",o:"When in Rome",uri:"spotify:track:6OV4CbPHRtbqrpJrbEFJfi"},
-  {t:"We Can Work It Out",c:"Stevie Wonder",o:"The Beatles",uri:"spotify:track:41q8ZiB3LZl4HRmmzUTIo4"},
-  {t:"One More Try",c:"LeAnn Rimes",o:"George Michael",uri:"spotify:track:0QeopWycQsDAo0p1sp3OcQ"},
-  {t:"Somewhere Only We Know",c:"Lily Allen",o:"Keane",uri:"spotify:track:7FnHpKPgVC6GE0RRCJNB2T"},
-  {t:"Free Fallin'",c:"John Mayer",o:"Tom Petty",uri:"spotify:track:4LloVtxNZpeh7q7xdi1DQc"},
-  {t:"Rich Girl",c:"Nina Simone",o:"Hall & Oates",uri:"spotify:track:2dIt2CrDGWT96WQLT08bfr"},
-  {t:"Shakedown Street",c:"Poolside",o:"Grateful Dead",uri:"spotify:track:0wPUWUZ0jzqnGddU793xHO"},
-  {t:"I'm Goin' Down",c:"Vampire Weekend",o:"Bruce Springsteen",uri:"spotify:track:4l7aryEsduuO7tQU8ZY46e"},
-  {t:"Zombie",c:"Miley Cyrus",o:"The Cranberries",uri:"spotify:track:0olaaJrCBTMJJvqPdvNpsx"},
-  {t:"Just My Imagination (Running Away With Me)",c:"The Rolling Stones",o:"The Temptations",uri:"spotify:track:7w2s5Wj0LPNhUkVCt8av09"},
-  {t:"I Won't Back Down",c:"Johnny Cash",o:"Tom Petty",uri:"spotify:track:5AmPClBlU5sK45i6kMSngt"},
-  {t:"Pony",c:"Leon Bridges",o:"Ginuwine",uri:"spotify:track:0exKMPo2iind68yWTaHCrr"},
-  {t:"Hold On, We're Going Home",c:"Lykke Li",o:"Drake",uri:"spotify:track:7dnUCIIZgKKIgsKGAB6kxJ"},
-  {t:"Don't Speak",c:"Carly Rae Jepsen",o:"No Doubt",uri:"spotify:track:0gzMEfErGPaCFbQJdb2HQb"},
-  {t:"Doin' Time",c:"Lana Del Rey",o:"Sublime",uri:"spotify:track:0cLS7FslBJgsuWwJNRnPWB"},
-  {t:"That Don't Impress Me Much",c:"HAIM",o:"Shania Twain",uri:"spotify:track:0qfZ778fbXXCtyEzyIET5K"},
-  {t:"Tempted",c:"Erykah Badu / James Poyser",o:"Squeeze",uri:"spotify:track:2I3vHOJZID259O7hNobDT5"},
-  {t:"What's Going On",c:"John Legend",o:"Marvin Gaye",uri:"spotify:track:2hdXm61Sl3ZUEmVdTSWRuU"},
-  {t:"You Are The Sunshine Of My Life",c:"Jack White",o:"Stevie Wonder",uri:"spotify:track:47YGxjuV2tiJbx0qscx9vH"},
-  {t:"Sweet Child O' Mine",c:"Sheryl Crow",o:"Guns N' Roses",uri:"spotify:track:0273i5ysrlovK8rr0KJfQn"},
-  {t:"Beat It",c:"Fall Out Boy / John Mayer",o:"Michael Jackson",uri:"spotify:track:2ds9vlk6o6BRCc2FAkmOvX"},
-  {t:"Across the Universe",c:"Fiona Apple",o:"The Beatles",uri:"spotify:track:6ZQgooEk8PvsLxedYaT6Oa"},
-  {t:"Go Your Own Way",c:"The Cranberries",o:"Fleetwood Mac",uri:"spotify:track:0VuhdSYkAOmhASbt5vnkdO"},
-  {t:"Baby One More Time",c:"Ed Sheeran",o:"Britney Spears",uri:"spotify:track:4mJDfMcT7odIUjWlb2WO4L"},
-  {t:"Midnight Rider",c:"Train",o:"The Allman Brothers Band",uri:"spotify:track:01CoJ5SrLd5V9nm9oD3b1m"},
-  {t:"Do You Really Want To Hurt Me",c:"Violent Femmes",o:"Culture Club",uri:"spotify:track:1VlQdZutH7z81HCIAmjycZ"},
-  {t:"Eleanor Rigby",c:"Aretha Franklin",o:"The Beatles",uri:"spotify:track:4ZLk4DCbXXyydFucsfzIVF"},
-  {t:"Mrs. Robinson",c:"The Lemonheads",o:"Simon & Garfunkel",uri:"spotify:track:5EugXICXL06waHgP4iTI58"},
-  {t:"Jolene",c:"Zac Brown Band",o:"Ray La Montagne",uri:"spotify:track:6xU4ei3n99VRE7Hog5WZJw"},
-  {t:"The Man Who Sold The World",c:"Nirvana",o:"David Bowie",uri:"spotify:track:15VRO9CQwMpbqUYA7e6Hwg"},
-  {t:"Fame",c:"Duran Duran",o:"David Bowie",uri:"spotify:track:2vZslxmYO9b8fyh08A3kqd"},
-  {t:"You're All I've Got Tonight",c:"The Smashing Pumpkins",o:"The Cars",uri:"spotify:track:2U0UC8lMdFyZcUss7X2urS"},
-  {t:"Shake It Off",c:"Ryan Adams",o:"Taylor Swift",uri:"spotify:track:391ijHd2drZtRfz5v0LqLf"},
-  {t:"Come Together",c:"Soundgarden",o:"The Beatles",uri:"spotify:track:5NE4CrEagAGj6zJWJ0V9N7"},
-  {t:"In My Life",c:"Ozzy Osbourne",o:"John Lennon",uri:"spotify:track:5oby5qH2fyOqzw5YYfeHmG"},
-  {t:"Heart Of Glass",c:"Miley Cyrus",o:"Blondie",uri:"spotify:track:5i7ThJfYLAzp2DyZuFpF6j"},
-  {t:"Don't Let The Sun Go Down On Me",c:"Miley Cyrus",o:"Elton John",uri:"spotify:track:03f2Q9Z8eaF8lPfNL6x3x7"},
-  {t:"Take Me to the River",c:"Talking Heads",o:"Al Green",uri:"spotify:track:1auuYcOrua5hrsGCS7idun"},
-  {t:"Space Oddity",c:"Natalie Merchant",o:"David Bowie",uri:"spotify:track:0dBzi0Vapr6MZUsTb47Mx9"},
-  {t:"Take The Money And Run",c:"Run-D.M.C. / Everlast",o:"Steve Miller Band",uri:"spotify:track:1lQcxbMAJvV7qL8llB9DOd"},
-  {t:"Bang A Gong (Get It On)",c:"U2 / Elton John",o:"T. Rex",uri:"spotify:track:53D3QRrXV0vyy2PSXAhuxG"},
-  {t:"American Woman",c:"Lenny Kravitz",o:"The Guess Who",uri:"spotify:track:3X6iIrFuQoCshIWBseEKPl"},
-  {t:"Rolling In The Deep",c:"Greta Van Fleet",o:"Adele",uri:"spotify:track:2VprRdTmbgyjXnDzHIcfNl"},
-  {t:"Smells Like Teen Spirit",c:"Tori Amos",o:"Nirvana",uri:"spotify:track:1kWqRB6PHLM9QTfaXuHpIV"},
-  {t:"Day Tripper",c:"Jimi Hendrix",o:"The Beatles",uri:"spotify:track:3UweOS7TngjWWQsdh9uKfb"},
-  {t:"Fly Like an Eagle",c:"Seal",o:"Steve Miller Band",uri:"spotify:track:4Nwm4lvNRxXkGR6aMmtdKm"},
-  {t:"Wish You Were Here",c:"Cody Jinks",o:"Pink Floyd",uri:"spotify:track:132PonN0vUr9BLDe0DmIYs"},
-  {t:"The First Time Ever I Saw Your Face",c:"James Blake",o:"Roberta Flack",uri:"spotify:track:0iOuOHywtfaQEcWKeyuH3m"},
-  {t:"No Diggity",c:"Chet Faker",o:"Blackstreet",uri:"spotify:track:2xD7RvKFJl52xyds3wQFXQ"},
-  {t:"Respect",c:"Aretha Franklin",o:"Otis Redding",uri:"spotify:track:7s25THrKz86DM225dOYwnr"},
-  {t:"Sweet Jane",c:"Cowboy Junkies",o:"Lou Reed",uri:"spotify:track:71OzN2JM6BoQD3JO9hiJFi"},
-  {t:"Pale Blue Eyes",c:"R.E.M.",o:"The Velvet Underground",uri:"spotify:track:1L52NHf7yOsywtWZW5dBNm"},
-  {t:"Hotel California",c:"Gipsy Kings",o:"Eagles",uri:"spotify:track:4Rvhe8O90hFIExTJkdrRPM"},
-  {t:"California Dreamin'",c:"Bobby Womack",o:"The Mamas & The Papas",uri:"spotify:track:6G7MHIvSDR3ehXPkuDFAlM"},
-  {t:"Heart-Shaped Box",c:"Glass Animals",o:"Nirvana",uri:"spotify:track:2UrSdFSG1rTuzCwAkeP0ou"},
-  {t:"Into the Mystic",c:"Gretchen Wilson",o:"Van Morrison",uri:"spotify:track:0VKt9tsf9gOY3eotIfRHNS"},
-  {t:"The Weight",c:"Aretha Franklin",o:"The Band",uri:"spotify:track:2VdHRWJeGpIY0WJcQD2mYd"},
-  {t:"Running Up That Hill",c:"Chromatics",o:"Kate Bush",uri:"spotify:track:20yPPvSSfIomexVwLdgXSo"},
-  {t:"Nothing Else Matters",c:"My Morning Jacket",o:"Metallica",uri:"spotify:track:2OcZNpbq0s1WGIGrlfKM43"},
-  {t:"Waiting Around to Die",c:"Michael Kiwanuka",o:"Townes Van Zandt",uri:"spotify:track:7cCoEL8adnIGrbmoEiJgy8"},
-  {t:"Smells Like Teen Spirit",c:"Patti Smith",o:"Nirvana",uri:"spotify:track:58cKWhCT3I4yhxtNpBlMli"},
-  {t:"Across the Universe",c:"David Bowie",o:"The Beatles",uri:"spotify:track:5sgcIWodRNC9FQYZ2ih6C9"},
-  {t:"Everybody's Talkin'",c:"Iggy Pop",o:"Harry Nilsson",uri:"spotify:track:7KgiUtiFi1F4cWgdXFBlu2"},
-  {t:"Hard To Handle",c:"The Black Crowes",o:"Otis Redding",uri:"spotify:track:05NYcsjJwOYq4jIiKPVj9p"},
-  {t:"After Midnight",c:"Eric Clapton",o:"JJ Cale",uri:"spotify:track:27mdmXNcO0gNpXlrWi9DPZ"},
-  {t:"Stand By Me",c:"John Lennon",o:"Ben E. King",uri:"spotify:track:3ntrdR24dLkKrzSGRv1FlH"},
-  {t:"Dead Flowers",c:"Townes Van Zandt",o:"The Rolling Stones",uri:"spotify:track:6QLh3oOA1AKocLHFH6j7qA"},
-  {t:"Stay",c:"Cat Power",o:"Rihanna",uri:"spotify:track:2ilo3w0stilJKeQZS61FeN"},
-  {t:"What The World Needs Now",c:"Cat Power",o:"Burt Bacharach",uri:"spotify:track:0x7EvWqUCbSspdAmYocBOs"},
-  {t:"It Ain't Me Babe",c:"Johnny Cash",o:"Bob Dylan",uri:"spotify:track:44Pcg6x09ipUmsQTHZOzxu"},
-  {t:"I Shall Be Released",c:"The Band",o:"Bob Dylan / The Band",uri:"spotify:track:1IoRkyadylakMOukD7uN67"},
-  {t:"Dancing In The Dark",c:"Hot Chip",o:"Bruce Springsteen",uri:"spotify:track:4tyLdUyjtvc2aTzZ2W1PLd"},
-  {t:"Signed, Sealed, Delivered (I'm Yours)",c:"Rufus Wainwright",o:"Stevie Wonder",uri:"spotify:track:46CIlA5RykShruWcP0mOLp"},
-  {t:"Waterfalls",c:"Death Cab for Cutie",o:"TLC",uri:"spotify:track:6p8ZhmQS4fia0j93S2M3Fj"},
-  {t:"Only Wanna Be With You",c:"Post Malone",o:"Hootie & The Blowfish",uri:"spotify:track:3SawmGBjjq8EOYZJV11cJm"},
-  {t:"Dancing in the Moonlight",c:"alt-J",o:"Toploader",uri:"spotify:track:2fpfApt0LZiOWybYfRVXTB"},
-  {t:"Wildflowers",c:"Miley Cyrus",o:"Tom Petty",uri:"spotify:track:4L0rxWhjyX0VhNbK4U9oK6"},
-  {t:"Romeo And Juliet",c:"The Killers",o:"Dire Straits",uri:"spotify:track:1kfrnPViuzKdNwmH21ehLg"},
-  {t:"Breakdown",c:"Grace Jones",o:"Tom Petty",uri:"spotify:track:2jeT39ucq9v0AojVibZb5G"},
-  {t:"Smalltown Boy",c:"Orville Peck",o:"Bronski Beat",uri:"spotify:track:2UyJBtpLTxB5D4M0Apvu7e"},
-  {t:"House of the Rising Sun",c:"The White Buffalo",o:"The Animals",uri:"spotify:track:7iXECdzTvdd9jq8TiMtE6V"},
-  {t:"When Doves Cry",c:"Patti Smith",o:"Prince",uri:"spotify:track:7w0chcuNV2QYryLRRXSuyh"},
-  {t:"People Get Ready",c:"Jeff Beck / Rod Stewart",o:"Curtis Mayfield",uri:"spotify:track:1Qd3CUBmJMBOmapxPYY6pZ"},
-  {t:"Long, Long Time",c:"Jerry Jeff Walker",o:"Linda Ronstadt",uri:"spotify:track:5FQc3Lzfeo7YwGiUyPIJoR"},
-  {t:"Tainted Love",c:"Milky Chance",o:"Soft Cell",uri:"spotify:track:1wAPbQ5XjbZqPl0WDl5mHH"},
-  {t:"Fire",c:"The Pointer Sisters",o:"Bruce Springsteen",uri:"spotify:track:65lHwG8JFJs67PnOUhCYPq"},
-  {t:"Jealous Guy",c:"The Weeknd",o:"John Lennon",uri:"spotify:track:5LffvExhQQFcfwqkGNpFpM"},
-  {t:"Streets of Philadelphia",c:"Waxahatchee",o:"Bruce Springsteen",uri:"spotify:track:6dnCLHX369y7VVewUWRVXJ"},
-  {t:"Hey Ya!",c:"Panic! At The Disco",o:"OutKast",uri:"spotify:track:22qQjtiv3Xy1P8WvpA6HgR"},
-  {t:"If I Fell",c:"Maroon 5",o:"The Beatles",uri:"spotify:track:3lAqHOGFBABytXxiPpDm6e"},
-  {t:"A Hard Day's Night",c:"The Supremes",o:"The Beatles",uri:"spotify:track:5CUrTeAj8XBgFIQvyhYvNs"},
-  {t:"September",c:"Taylor Swift",o:"Earth, Wind & Fire",uri:"spotify:track:5eGX87IiKsGuzS3iw4CfCX"},
-  {t:"Johnny B Goode",c:"The Beatles",o:"Chuck Berry",uri:"spotify:track:4QqUqY4ZcEsXELYQbnSy5u"},
-  {t:"Help!",c:"Oasis",o:"The Beatles",uri:"spotify:track:6PebPuMhnHYrHQakCAmkYL"},
-  {t:"Dancing with Myself",c:"blink-182",o:"Billy Idol",uri:"spotify:track:4y2qF52ShKI6w3pxnwt3wl"},
-  {t:"Something",c:"Norah Jones",o:"George Harrison",uri:"spotify:track:2jYsAnjf4aDrOK75xk7MYn"},
-  {t:"Like a Virgin",c:"Motley Crue",o:"Madonna",uri:"spotify:track:55tH1vUqhMrLlcJ09k2QGq"},
-  {t:"I Get Around",c:"Red Hot Chili Peppers",o:"The Beach Boys",uri:"spotify:track:06JprR8etx1u9C9k55lT1x"},
-  {t:"Tonight, Tonight",c:"Passion Pit",o:"The Smashing Pumpkins",uri:"spotify:track:6F3Zu1SBa0duBomvXmWUCo"},
-  {t:"just like heaven",c:"The Lumineers",o:"The Cure",uri:"spotify:track:11xjDJ7i9BLd1AYMedwJQK"},
-  {t:"Just Breathe",c:"Willie Nelson / Lukas Nelson",o:"Eddie Vedder / Pearl Jam",uri:"spotify:track:3rIgqH7rTzpB7Gtvo6oDsA"},
-  {t:"Turn The Page",c:"Metallica",o:"Bob Seger",uri:"spotify:track:7HPhrbgMHV5cUskknWA2oo"},
-  {t:"Born This Way",c:"Orville Peck",o:"Lady Gaga",uri:"spotify:track:7KaCtOjnF9W1qztV4Kv3nj"},
-  {t:"Africa",c:"Weezer",o:"Toto",uri:"spotify:track:36Pim2ANczp82lCWIb8GHy"},
-  {t:"Bohemian Rhapsody",c:"Panic! At The Disco",o:"Queen",uri:"spotify:track:2YSbHu9XF4bNYWt3MnIhgE"},
-  {t:"Unchained Melody",c:"Norah Jones",o:"Righteous Brothers",uri:"spotify:track:6MSR1feoxyvndpYL8ukq4g"},
-  {t:"Big Yellow Taxi",c:"Counting Crows / Vanessa Carlton",o:"Joni Mitchell",uri:"spotify:track:0KTfZWEWivacSuZSjUe7JS"},
-  {t:"The Boxer",c:"Mumford & Sons",o:"Paul Simon",uri:"spotify:track:7844FJ9yD5mdJSwbJaKT6n"},
-  {t:"Come Together",c:"Michael Jackson",o:"The Beatles",uri:"spotify:track:1eGYirwbCEhehpvytx7BRd"},
-  {t:"I Wanna Dance With Somebody (Who Loves Me)",c:"Fall Out Boy",o:"Whitney Houston",uri:"spotify:track:3Nca5js9xKegX655YZ43Uq"},
-  {t:"Kung Fu Fighting",c:"CeeLo Green",o:"Carl Douglas",uri:"spotify:track:0INtjcLMDnXjNB2YGe6RBT"},
-  {t:"Message In a Bottle",c:"John Mayer",o:"The Police",uri:"spotify:track:1UsarbwGD3O7mXy7G8Qj9x"},
-  {t:"Sex And Candy",c:"Maroon 5",o:"Marcy Playground",uri:"spotify:track:3TXawfi6N6DFjJQ6jNFg8m"},
-  {t:"Signed Sealed Delivered",c:"Elton John",o:"Stevie Wonder",uri:"spotify:track:2FH9G4k5xjgV9h9P1qkPQZ"},
-  {t:"Word Up!",c:"Korn",o:"Cameo",uri:"spotify:track:4eRfCcicjpjoCaYWylRU7m"},
-  {t:"Saturday Night's Alright (For Fighting)",c:"Nickelback",o:"Elton John",uri:"spotify:track:5tHoSyAlYoNjurlgDF3wbQ"},
-  {t:"(Everything I Do) I Do It for You",c:"Brandy",o:"Bryan Adams",uri:"spotify:track:5GVyxBx7OX5RtkYSUTx9p2"},
-  {t:"No One",c:"Cold War Kids",o:"Alicia Keys",uri:"spotify:track:2slPSwOa6A605bhQkrcSdi"},
-  {t:"Use Your Love",c:"Katy Perry",o:"The Outfield",uri:"spotify:track:3GFLdiYwnXO5xGuiQ3OUce"},
-  {t:"Champagne Supernova",c:"OneRepublic",o:"Oasis",uri:"spotify:track:3RIYWuMEasEhXVNx722ZOC"},
-  {t:"Drops Of Jupiter",c:"Taylor Swift",o:"Train",uri:"spotify:track:0BSmbCIY36iw04azzJ3S0S"},
-  {t:"Strawberry Fields Forever",c:"Ben Harper",o:"The Beatles",uri:"spotify:track:7AQZRacVM7ERPl6hKZb70a"},
-  {t:"Roxanne",c:"George Michael",o:"The Police",uri:"spotify:track:63rKiGqcfNsMU4kAqmm4uY"},
-  {t:"I Heard It Through the Grapevine",c:"Ella Fitzgerald",o:"Marvin Gaye",uri:"spotify:track:5cF6pnGNKYIq9PqhO46JYF"},
-  {t:"Respect",c:"Kelly Clarkson",o:"Otis Redding",uri:"spotify:track:1MsJ1ZOL5bcnPyL0rPhY4L"},
-  {t:"Proud Mary",c:"Ike & Tina Turner",o:"Creedence Clearwater Revival",uri:"spotify:track:5YI7v4VBa23fbEt9wuUmkg"},
-  {t:"Have You Ever Seen the Rain",c:"Johnny Cash",o:"Creedence Clearwater Revival",uri:"spotify:track:2YQxytI5Kba6Uo3z0NgFlp"},
-  {t:"Down On The Corner",c:"Bryan Adams",o:"Creedence Clearwater Revival",uri:"spotify:track:7wVtH8VjUi5xzrzUOHtlZO"},
-  {t:"Travelin' Band",c:"Elton John",o:"Creedence Clearwater Revival",uri:"spotify:track:1CCvaHikp11fBVjXa8AlEY"},
-  {t:"Mr. Tambourine Man",c:"Stevie Wonder",o:"Bob Dylan",uri:"spotify:track:2DuHY4meaFz04Qs2UXfKir"},
-  {t:"Let's Go Crazy",c:"Incubus",o:"Prince",uri:"spotify:track:1mRyq8mXYPasjh8tDXOa8F"},
-  {t:"We Will Rock You",c:"Nickelback",o:"Queen",uri:"spotify:track:39lsDpIy3xdHndtg1bON4B"},
-  {t:"Wicked Game",c:"Celine Dion / Chris Isaak",o:"Chris Isaak",uri:"spotify:track:7rSSVVqC2sqDhmt1LfWm3J"},
-  {t:"Mood Indigo",c:"Frank Sinatra",o:"Duke Ellington",uri:"spotify:track:2LuKtTtotMk41MxesmjCdR"},
-  {t:"Unknown Legend",c:"Shovels & Rope / Shakey Graves",o:"Neil Young",uri:"spotify:track:6INaSJ4clfZ8pvXSGZQnJ7"},
-  {t:"If Not for You",c:"George Harrison",o:"Bob Dylan",uri:"spotify:track:04meQOdHsGUMmlgLHmq0Is"},
-  {t:"Hallelujah",c:"Rufus Wainwright",o:"Leonard Cohen",uri:"spotify:track:6JUALLwHnidbO4eM09ArIh"},
-  {t:"Fix You",c:"Kacey Musgraves",o:"Coldplay",uri:"spotify:track:0vzv4fNNHbkVCTVGQwxxGw"},
-  {t:"I Can't Make U Love Me",c:"Prince",o:"George Michael",uri:"spotify:track:1McFO5OQdbM4RX4aHT0evy"},
-  {t:"Fast Car",c:"Luke Combs",o:"Tracy Chapman",uri:"spotify:track:1Lo0QY9cvc8sUB2vnIOxDT"},
-  {t:"JOLENE",c:"Beyonce",o:"Dolly Parton",uri:"spotify:track:2PmMh2t7jAtN6cqFooA0Xy"},
-  {t:"The First Cut Is the Deepest",c:"Rod Stewart",o:"Cat Stevens",uri:"spotify:track:3FeYjbIVqvAhuTcwsE6K3v"},
-  {t:"The First Cut Is The Deepest",c:"Sheryl Crow",o:"Cat Stevens",uri:"spotify:track:7gN24J8E0pR3G2nsbhkcjw"},
-  {t:"Save It For Later",c:"Eddie Vedder",o:"The English Beat",uri:"spotify:track:2rs6UMzlu1pMGGVw60tiHm"},
-  {t:"I Think We're Alone Now",c:"Billie Joe Armstrong / Green Day",o:"Tommy James & The Shondells",uri:"spotify:track:6h8QlZzBBnZhF4EkGi8JPr"},
-  {t:"I Was Made For Lovin' You",c:"YUNGBLUD",o:"Kiss",uri:"spotify:track:55ikcenXPbQdzCnO1sOuYg"},
-  {t:"Redemption Song",c:"Johnny Cash / Joe Strummer",o:"Bob Marley",uri:"spotify:track:6ArficY3dtVMWYkyTYkAJP"},
-  {t:"Angel",c:"Shaggy / Rayvon",o:"Steve Miller",uri:"spotify:track:7FDV5ELOJHCGLe52AnttEd"},
-  {t:"Behind Blue Eyes",c:"Limp Bizkit",o:"The Who",uri:"spotify:track:1MTQHCpraD4S8g5PAFKzoj"},
-  {t:"The Sound of Silence",c:"Disturbed",o:"Simon & Garfunkel",uri:"spotify:track:1Cj2vqUwlJVG27gJrun92y"},
-  {t:"Many Rivers To Cross",c:"Joe Cocker",o:"Jimmy Cliff",uri:"spotify:track:6MQuAYJgRwUn44gCdOcFIm"},
-  {t:"Waitin' Round to Die",c:"Whitey Morgan and the 78s",o:"Townes Van Zandt",uri:"spotify:track:0V25R2BtymvTb5oJCleXqs"},
-  {t:"Dancing in the Moonlight",c:"Toploader",o:"King Harvest",uri:"spotify:track:3Fzlg5r1IjhLk2qRw667od"},
-  {t:"I Got You Babe",c:"UB40 / Chrissie Hynde",o:"Sonny & Cher",uri:"spotify:track:07itbZUgkAmBi4CEH5NniJ"},
-  {t:"I Got You Babe",c:"Etta James",o:"Sonny & Cher",uri:"spotify:track:228jEjW3dgYStlF1JrZfdq"},
-  {t:"I Got You Babe",c:"Bahamas",o:"Sonny & Cher",uri:"spotify:track:1to9REkgyVv6BX7fyWgEUj"},
-  {t:"Everybody Hurts",c:"Joe Cocker",o:"R.E.M.",uri:"spotify:track:3EyYwX9RuQIX10vUBYPGHv"},
-  {t:"Suzanne",c:"Nina Simone",o:"Leonard Cohen",uri:"spotify:track:1rsTANyQavJLIiPIFUgoiM"},
-  {t:"Higher Love",c:"Kygo / Whitney Houston",o:"Steve Winwood",uri:"spotify:track:6oJ6le65B3SEqPwMRNXWjY"},
-  {t:"Fever",c:"The Cramps",o:"Peggy Lee",uri:"spotify:track:7yh5TWp0LMOjFp5qrH8ygL"},
-  {t:"Light My Fire",c:"Jose Feliciano",o:"The Doors",uri:"spotify:track:1348ERWpfnXaKiMQSMjBu1"},
-  {t:"Atlantic City",c:"The Band",o:"Bruce Springsteen",uri:"spotify:track:4JwjzS9WFkWlpzGCwh82fn"},
-  {t:"Love Is Blindness",c:"Jack White",o:"U2",uri:"spotify:track:1kBM7AURqQTIXFePNVpEwP"},
-  {t:"A Change Is Gonna Come",c:"Greta Van Fleet",o:"Sam Cooke",uri:"spotify:track:2N5v6m1FXvivCjLOPcuSJh"},
-  {t:"The Chain",c:"Jose Feliciano",o:"Fleetwood Mac",uri:"spotify:track:17JfRQAuG7VwfnqPlGxOZw"},
-  {t:"A Change Is Gonna Come",c:"The Neville Brothers",o:"Sam Cooke",uri:"spotify:track:1Aw8AzGtFssawCsiCxxyAr"},
-  {t:"Harvest Moon",c:"Lord Huron",o:"Neil Young",uri:"spotify:track:6gdCb962lq0Xdg7ypVLuLt"},
-  {t:"What's Going On",c:"U2",o:"Marvin Gaye",uri:"spotify:track:2oCvlNPQ3EsLOBo1WkWz0K"},
-  {t:"Dear Prudence",c:"Jerry Garcia",o:"The Beatles",uri:"spotify:track:4Mf9q0eadEnXoijUGqHwPS"},
-  {t:"Bad Company",c:"Bad Company / Charley Crockett",o:"Bad Company",uri:"spotify:track:2eAyPnMrdMLkuYaUQsWl8K"},
-  {t:"No Surprises",c:"Jeremiah Fraites / Gregory Alan Isakov",o:"Radiohead",uri:"spotify:track:0G0f65AP53H6JUGRXrBRln"},
-  {t:"Angel from Montgomery",c:"Bonnie Raitt",o:"John Prine",uri:"spotify:track:6JssQFiBCi6ZcE6060S9A7"},
-  {t:"Nothing Compares 2 U",c:"Sinead O'Connor",o:"Prince",uri:"spotify:track:3nvuPQTw2zuFAVuLsC9IYQ"},
-  {t:"Nothing Else Matters",c:"Chris Stapleton",o:"Metallica",uri:"spotify:track:2diAXaP8GEWHa6ORPctFnh"},
-  {t:"Personal Jesus",c:"Def Leppard",o:"Depeche Mode",uri:"spotify:track:0KXYrQAqpAREiCi4pB5fO9"},
-  {t:"Crazy",c:"Violent Femmes",o:"Gnarls Barkley",uri:"spotify:track:44SByzaGTyuyLKxbV3g3B2"},
-  {t:"I'm On Fire",c:"Shakey Graves",o:"Bruce Springsteen",uri:"spotify:track:1jlJlbsECScG7OdDHQTyyC"},
-  {t:"Dancing In The Dark",c:"Benny Sings",o:"Bruce Springsteen",uri:"spotify:track:6xTB1RZS2BEsXjcMQSeXtu"},
-  {t:"No Diggity",c:"Nick Murphy",o:"Blackstreet",uri:"spotify:track:5MiQly7cdHQiP6JBX1PSYG"},
-  {t:"I'm On Fire",c:"AWOLNATION",o:"Bruce Springsteen",uri:"spotify:track:5mOmBubZnYIy9EgMZFlDlZ"},
-  {t:"Please Mister Postman",c:"The Beatles",o:"The Carpenters",uri:"spotify:track:6wfK1R6FoLpmUA9lk5ll4T"},
-  {t:"Two of Us",c:"Aimee Mann",o:"The Beatles",uri:"spotify:track:3hduloI1MwLBPm8DqOG4Xb"},
-  {t:"Stay With Me",c:"The Temptations",o:"Sam Smith",uri:"spotify:track:6RBchxNA94qTIJQCJ9G6et"},
-  {t:"Spirit In The Sky",c:"Elton John",o:"Norman Greenbaum",uri:"spotify:track:4Ju1TTtFRz8y6dvo8it65k"},
-  {t:"(I Can't Help) Falling In Love With You",c:"UB40",o:"Neil Diamond",uri:"spotify:track:7ojJ4XvqBhBcteM0zjMebT"},
-  {t:"Blackbird",c:"Sarah McLachlan",o:"The Beatles",uri:"spotify:track:7ol4EBFZnZoxHAuUdJ6FRp"},
-  {t:"Take Me Home, Country Roads",c:"Lana Del Rey",o:"John Denver",uri:"spotify:track:7qF0FfuzBFwMe1lNHkEDxW"},
-  {t:"In My Life",c:"Johnny Cash",o:"John Lennon",uri:"spotify:track:7Dprt8s1FohodJYtCNcM4a"},
-  {t:"Fresh Prince of Bel-Air",c:"Neil Young",o:"Will Smith",uri:"spotify:track:2xKTTp7bTGc8pB5HCEw8rx"},
-  {t:"I Think We're Alone Now",c:"Tiffany",o:"Tommy James & The Shondells",uri:"spotify:track:4uvjOKsp7mSjrDhWdkLPBY"}
-];
 
 // ── STATE ──
 let token=null,playlists=[],selectedPl=null;
@@ -1205,7 +598,7 @@ async function startGame(){
     }
   }catch(e){
     console.warn('Sheet load failed, using built-in:',e.message);
-    tracks=[...TRACKS];
+    tracks=[];
     setStatus('Using built-in song list.');
   }
 
@@ -1238,6 +631,7 @@ async function beginRound(){
   roundSongHistory=[];
   prevSongs=[];
   currentSongChecks=null;
+  currentSong=null;
   const pb=$('prev-btn');if(pb)pb.disabled=true;
   // Pre-clear song card so nothing stale shows at round start
   $('s-name').textContent='Loading...';
@@ -1264,10 +658,6 @@ async function beginRound(){
   loadSong();startTimer();
 }
 
-function lookupOriginal(name,coverArtist){
-  const match=DB.find(s=>s.t.toLowerCase()===name.toLowerCase()&&coverArtist.toLowerCase().includes(s.c.split('/')[0].trim().toLowerCase()));
-  return match?.o||'(original artist)';
-}
 
 function loadSong(fromPrev){
   // If there's a carry-over song and this is the first song of the round, use it
@@ -1286,19 +676,27 @@ function loadSong(fromPrev){
   displaySong(song, false);
 }
 
+// Tracks the currently displayed song for prev/carry-over
+let currentSong=null;
+
 function displaySong(song, isCarryOver){
   const title=song.t||song.name||'';
   const cover=song.c||(song.artists?.map(a=>a.name).join(', '))||'';
   const original=song.o||'';
   const uri=song.uri||null;
 
-  // Push to prev stack
-  if(currentSongChecks!==null){
-    prevSongs.push({song:prevSongs.length>0?null:null, title, cover, original, uri, savedChecks:currentSongChecks});
+  // Push current song to prev stack BEFORE switching
+  if(currentSong!==null){
+    prevSongs.push({
+      title:currentSong.title,cover:currentSong.cover,
+      original:currentSong.original,uri:currentSong.uri,
+      savedChecks:{...chks}
+    });
+    if(prevSongs.length>10)prevSongs.shift();
   }
-  // Cap prev stack at 10
-  if(prevSongs.length>10)prevSongs.shift();
-  // Store current song ref for prev stack
+
+  // Update current song reference
+  currentSong={title,cover,original,uri};
   currentSongChecks={title:false,cover:false,original:false};
 
   // Enable/disable prev button
@@ -1328,6 +726,30 @@ function displaySong(song, isCarryOver){
 
 function toggle(k){chks[k]=!chks[k];$('chk-'+k).className='chk'+(chks[k]?' on':'')}
 
+async function prevSong(){
+  if(prevSongs.length===0)return;
+  await pauseSpotify();
+  await new Promise(res=>setTimeout(res,300));
+  const prev=prevSongs.pop();
+  // Restore current song ref WITHOUT pushing to prev stack again
+  currentSong={title:prev.title,cover:prev.cover,original:prev.original,uri:prev.uri};
+  // Restore display
+  $('s-name').textContent=prev.title;
+  $('s-by').textContent='by '+prev.cover;
+  $('ans-title').textContent=prev.title;
+  $('ans-cover').textContent=prev.cover;
+  $('ans-original').textContent=prev.original;
+  // Restore checkboxes
+  chks={...prev.savedChecks};
+  ['title','cover','original'].forEach(k=>{
+    $('chk-'+k).className='chk'+(chks[k]?' on':'');
+  });
+  currentSongChecks={...prev.savedChecks};
+  const pb=$('prev-btn');
+  if(pb)pb.disabled=prevSongs.length===0;
+  if(prev.uri&&active)playTrack(prev.uri);
+}
+
 async function nextSong(){
   // Stop current track first, wait for it to actually stop
   await pauseSpotify();
@@ -1352,10 +774,9 @@ async function nextSong(){
   songHistory.push(songEntry);
   roundSongHistory.push(songEntry);
 
-  // If 0 points scored, mark as carry-over for next team
-  if(pts===0){
-    const curSong=tracks[idx-1]||{t:curTitle,c:curCover,o:curOriginal,uri:null};
-    carryOverSong={t:curTitle,c:curCover,o:curOriginal,uri:curSong.uri||null};
+  // If 0 points scored, carry current song to next team
+  if(pts===0 && currentSong){
+    carryOverSong={...currentSong};
   } else {
     carryOverSong=null;
   }
@@ -1391,13 +812,18 @@ function startTimer(){
 
 let graceTimer=null;
 function showGracePeriod(){
-  active=false; // stop new songs playing
+  active=false;
   pauseSpotify();
+  // Disable all action buttons — only checkboxes remain active
+  ['next-btn','prev-btn','pause-btn'].forEach(id=>{
+    const el=document.getElementById(id)||document.querySelector('.'+id);
+    if(el)el.disabled=true;
+  });
+  document.querySelectorAll('.next-btn,.stop-btn,.pause-btn').forEach(el=>el.disabled=true);
+
   let graceLeft=5;
-  // Show timer as "Time's Up! Score now: X"
   $('t-num').textContent='⏱';
   const bar=$('turn-bar');
-  const origBarText=bar.textContent;
   bar.textContent="Time's Up! Score now: "+graceLeft+"s";
   bar.style.background='#c0392b';bar.style.color='#fff';
   graceTimer=setInterval(()=>{
@@ -1406,6 +832,9 @@ function showGracePeriod(){
     if(graceLeft<=0){
       clearInterval(graceTimer);
       bar.style.background='';bar.style.color='';
+      // Re-enable buttons
+      document.querySelectorAll('.next-btn,.stop-btn,.pause-btn').forEach(el=>el.disabled=false);
+      const pb=$('prev-btn');if(pb)pb.disabled=prevSongs.length===0;
       endRound();
     }
   },1000);
@@ -1469,20 +898,45 @@ function endRound(){
     // Populate songs played this turn
   const songsEl=$('re-songs');
   const songsListEl=$('re-songs-list');
-  if(roundSongHistory.length>0){
-    songsEl.style.display='block';
-    songsListEl.innerHTML=roundSongHistory.map(s=>{
-      const pts=s.pts;
-      const color=pts>0?'var(--green)':'#666';
+  // Build per-team song tables for this round
+  // Show each team that played this round
+  const teamsThisRound=[...new Set(roundSongHistory.map(s=>s.team))];
+  // Also show all active teams even if no songs scored
+  const allTeamsThisRound=teamNames.filter((_,i)=>activeTeamIndices.includes(i));
+  // Combine — show active teams in order
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
+
+  let roundSongsHtml='';
+  let anyScored=false;
+
+  allTeamsThisRound.forEach(teamName=>{
+    const teamIdx=teamNames.indexOf(teamName);
+    const color=colors[teamIdx%colors.length];
+    const teamSongs=roundSongHistory.filter(s=>s.team===teamName&&s.pts>0);
+    if(teamSongs.length===0)return;
+    anyScored=true;
+    roundSongsHtml+=`<div style="margin-bottom:4px">
+      <div style="font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:${color};margin-bottom:.35rem;font-weight:600">${teamName}</div>`;
+    roundSongsHtml+=teamSongs.map(s=>{
       const checks=[];
       if(s.checks.title)checks.push('Title');
       if(s.checks.cover)checks.push('Cover');
       if(s.checks.original)checks.push('Original');
-      return '<div style="display:flex;align-items:center;gap:8px;background:var(--vinyl);border-radius:8px;padding:7px 10px;font-size:.78rem">'+
-        '<span style="color:'+color+';font-family:Playfair Display,serif;font-size:1rem;font-weight:700;min-width:20px">'+pts+'</span>'+
-        '<div style="flex:1;min-width:0"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">'+s.title+'</div>'+
-        '<div style="color:var(--muted);font-size:.7rem">'+s.cover+(checks.length?' · '+checks.join(', '):'')+'</div></div></div>';
+      return `<div style="background:var(--vinyl);border-radius:8px;padding:7px 10px;font-size:.78rem;margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:var(--green);font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;min-width:20px">+${s.pts}</span>
+          <div style="font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.title}</div>
+        </div>
+        <div style="font-size:.7rem;color:var(--muted);padding-left:28px">${s.cover} · Original: ${s.original}</div>
+        ${checks.length?`<div style="font-size:.68rem;color:var(--green);padding-left:28px">✓ ${checks.join(', ')}</div>`:''}
+      </div>`;
     }).join('');
+    roundSongsHtml+='</div>';
+  });
+
+  if(anyScored){
+    songsEl.style.display='block';
+    songsListEl.innerHTML=roundSongsHtml;
   } else {
     songsEl.style.display='none';
   }
@@ -1608,18 +1062,43 @@ function renderStats(){
       <div style="font-size:.72rem;color:var(--muted)">${n}</div>
       <div style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:${colors[i%colors.length]}">${teamScores[i]}</div>
     </div>`).join('<div style="font-family:Playfair Display,serif;font-size:1.2rem;color:var(--muted);align-self:center">·</div>');
-  // Full game song history
+  // Full game song history — separated by team
   if(songHistory.length>0){
-    html+='<div class="stats-team-card"><div class="stats-section-label">All Songs Played</div>';
-    html+=songHistory.map(s=>{
-      const color=s.pts>0?'var(--green)':'#555';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #333;font-size:.78rem">'+
-        '<span style="color:'+color+';font-family:Playfair Display,serif;font-weight:700;min-width:20px">'+s.pts+'</span>'+
-        '<div style="flex:1;min-width:0">'+
-        '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">'+s.title+'</div>'+
-        '<div style="color:var(--muted);font-size:.7rem">'+s.cover+' — '+s.team+'</div></div></div>';
-    }).join('');
-    html+='</div>';
+    // Group by team
+    const byTeam={};
+    songHistory.forEach(s=>{
+      if(!byTeam[s.team])byTeam[s.team]={scored:[],unscored:[]};
+      if(s.pts>0)byTeam[s.team].scored.push(s);
+      else byTeam[s.team].unscored.push(s);
+    });
+    Object.entries(byTeam).forEach(([team,songs])=>{
+      html+='<div class="stats-team-card"><div class="stats-section-label" style="margin-bottom:.75rem">'+team+' — Songs Played</div>';
+      if(songs.scored.length>0){
+        html+='<div style="font-size:.68rem;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.4rem">Scored</div>';
+        html+=songs.scored.map(s=>{
+          const checks=[];
+          if(s.checks.title)checks.push('Title');
+          if(s.checks.cover)checks.push('Cover');
+          if(s.checks.original)checks.push('Original');
+          return '<div style="background:var(--vinyl);border-radius:8px;padding:7px 10px;font-size:.78rem;margin-bottom:4px">'+
+            '<div style="display:flex;gap:8px;align-items:center">'+
+            '<span style="color:var(--green);font-family:Playfair Display,serif;font-weight:700;min-width:20px">+'+s.pts+'</span>'+
+            '<div style="font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.title+'</div></div>'+
+            '<div style="font-size:.7rem;color:var(--muted);padding-left:28px">'+s.cover+' · Original: '+s.original+'</div>'+
+            (checks.length?'<div style="font-size:.68rem;color:var(--green);padding-left:28px">✓ '+checks.join(', ')+'</div>':'')+
+            '</div>';
+        }).join('');
+      }
+      if(songs.unscored.length>0){
+        html+='<div style="font-size:.68rem;color:#666;letter-spacing:.1em;text-transform:uppercase;margin:.6rem 0 .4rem">Not Scored</div>';
+        html+=songs.unscored.map(s=>
+          '<div style="background:var(--vinyl);border-radius:8px;padding:7px 10px;font-size:.78rem;margin-bottom:4px;opacity:.7">'+
+          '<div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+s.title+'</div>'+
+          '<div style="font-size:.7rem;color:var(--muted)">'+s.cover+' · Original: '+s.original+'</div></div>'
+        ).join('');
+      }
+      html+='</div>';
+    });
   }
 
   html+=`<div class="stats-team-card" style="text-align:center">
@@ -1767,17 +1246,6 @@ async function fetchSheet(){
   return d.rows||[];
 }
 
-
-async function loadSongsFromSheet(){
-  try{
-    const rows=await fetchSheet();
-    const approved=rows.filter(r=>r.status==='approved'&&r.uri&&r.original);
-    return approved.map(r=>({t:r.title,c:r.cover,o:r.original,uri:r.uri}));
-  }catch(e){
-    console.warn('Sheet load failed, using built-in songs:',e.message);
-    return null; // fall back to TRACKS
-  }
-}
 
 function jsonpFetch(url){
   // Use script tag to bypass CORS — works with Apps Script GET endpoints
