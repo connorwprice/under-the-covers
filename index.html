@@ -672,16 +672,18 @@ function loadSong(fromPrev){
   // Play carry-over songs first (queue of unscored songs from prev team)
   if(!fromPrev && prevSongData===null && carryOverQueue.length>0){
     const song=carryOverQueue.shift();
-    // Mark as played so it doesn't repeat
-    playedUris.add(song.uri||song.t);
+    // Mark as played so it doesn't repeat in normal queue
+    if(song.uri)playedUris.add(song.uri);
+    if(song.t)playedUris.add(song.t);
     displaySong(song, true);
     return;
   }
   // Skip already-played songs
-  while(idx<tracks.length && playedUris.has(tracks[idx].uri||tracks[idx].t)){idx++}
+  while(idx<tracks.length && (playedUris.has(tracks[idx].uri)||playedUris.has(tracks[idx].t))){idx++}
   if(idx>=tracks.length){endRound();return}
   const song=tracks[idx];
-  playedUris.add(song.uri||song.t);
+  if(song.uri)playedUris.add(song.uri);
+  if(song.t)playedUris.add(song.t);
   idx++;
   displaySong(song, false);
 }
@@ -801,7 +803,7 @@ async function nextSong(){
       else if(pts===0)roundSongHistory.splice(roundSongHistory.indexOf(existing),1);
     }
     if(pts===0&&scoredSong&&!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri)){
-      pendingCarryOverQueue.push({...scoredSong});
+      pendingCarryOverQueue.push({t:scoredSong.title,c:scoredSong.cover,o:scoredSong.original,uri:scoredSong.uri});
     }
     carryOverSong=null;
     if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){winTriggeredBy=currentTeamIdx;roundsThisCycle=0;}
@@ -860,8 +862,9 @@ async function nextSong(){
   // If 0 points scored, add to carry-over queue for next team
   // Never clear the queue — accumulate all unscored songs from this round
   if(pts===0 && scoredSong){
-    if(!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri&&s.title===scoredSong.title)){
-      pendingCarryOverQueue.push({...scoredSong});
+    if(!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri)){
+      // Store in t/c/o format to match tracks array
+      pendingCarryOverQueue.push({t:scoredSong.title,c:scoredSong.cover,o:scoredSong.original,uri:scoredSong.uri});
     }
   }
   carryOverSong=null;
@@ -988,8 +991,8 @@ function endRound(){
     }
   } else if(gracePts===0&&currentSong){
     // Song at round end was unscored — carry it over
-    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri&&s.title===currentSong.title)){
-      pendingCarryOverQueue.push({...currentSong});
+    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri)){
+      pendingCarryOverQueue.push({t:currentSong.title,c:currentSong.cover,o:currentSong.original,uri:currentSong.uri});
     }
   }
 
