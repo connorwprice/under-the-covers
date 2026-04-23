@@ -1255,20 +1255,35 @@ function loadSong(){
   const cover=song.c||(song.artists?.map(a=>a.name).join(', '))||'';
   const original=song.o||'';
   const uri=song.uri||null;
-  $('s-name').textContent=title;
-  $('s-by').textContent='by '+cover;
-  $('s-art').src='';$('s-art').style.display='none';
-  $('ans-title').textContent=title;
-  $('ans-cover').textContent=cover;
-  $('ans-original').textContent=original;
+  // Clear display first to avoid flash of stale content
+  $('s-name').textContent='Loading...';
+  $('s-by').textContent='';
+  $('s-art').style.display='none';
+  $('s-art').src='';
+  $('ans-title').textContent='—';
+  $('ans-cover').textContent='—';
+  $('ans-original').textContent='—';
   chks={title:false,cover:false,original:false};
   ['title','cover','original'].forEach(k=>$('chk-'+k).className='chk');
+
+  // Small delay to let Spotify start before showing song info
+  // (prevents spoiling the answer before audio plays)
+  setTimeout(()=>{
+    $('s-name').textContent=title;
+    $('s-by').textContent='by '+cover;
+    $('ans-title').textContent=title;
+    $('ans-cover').textContent=cover;
+    $('ans-original').textContent=original;
+  }, 800);
+
   if(uri&&active)playTrack(uri);
 }
 
 function toggle(k){chks[k]=!chks[k];$('chk-'+k).className='chk'+(chks[k]?' on':'')}
 
 function nextSong(){
+  // Auto-resume if paused
+  if(paused)resumeFromPause();
   const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
   const pts=t+cv+o;
   roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
@@ -1286,6 +1301,8 @@ function nextSong(){
   loadSong();
 }
 function skipSong(){
+  // Auto-resume if paused
+  if(paused)resumeFromPause();
   roundStats.skips++;teamStats[currentTeamIdx].skips++;
   idx++;if(idx>=tracks.length){endRound();return}loadSong();
 }
@@ -1531,15 +1548,21 @@ function togglePause(){
     btn.textContent='▶ Resume';
     btn.classList.add('paused');
   } else {
-    // Resume timer
-    timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
-    // Resume playback from where it was paused (no body = resume, not restart)
-    fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
-      method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
-    }).catch(()=>{});
-    btn.textContent='❚❚ Pause';
-    btn.classList.remove('paused');
+    resumeFromPause();
   }
+}
+
+function resumeFromPause(){
+  if(!paused)return;
+  paused=false;
+  // Restart timer
+  timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
+  // Resume Spotify from current position
+  fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
+    method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
+  }).catch(()=>{});
+  const btn=$('pause-btn');
+  if(btn){btn.textContent='❚❚ Pause';btn.classList.remove('paused');}
 }
 
 function confirmStop(){
@@ -1735,6 +1758,12 @@ function renderAdminPanel(sheetRows){
 
   // Render APPROVED count + list
   $('admin-approved-count').textContent=approvedSongs.length;
+  // Show total including removed for transparency
+  const removedCount=sheetRows.filter(r=>r.status==='removed').length;
+  if(removedCount>0){
+    const countEl=$('admin-approved-count');
+    countEl.title=removedCount+' removed song(s) hidden';
+  }
   $('admin-approved-list').innerHTML=approvedSongs.map(r=>`
     <div class="admin-song-row">
       <span class="admin-badge badge-approved">OK</span>
