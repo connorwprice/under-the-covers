@@ -257,10 +257,10 @@
   </div>
   <div class="song-card">
     <div class="track-row">
-      <img id="s-art" class="track-art" src="" alt="">
+      <div id="s-art-wrap" class="track-art" style="display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0">🎵</div>
       <div>
         <div class="now-lbl"><span class="now-dot"></span>Now Playing</div>
-        <div class="track-title" id="s-name">—</div>
+        <div class="track-title" id="s-name">Loading...</div>
         <div class="track-by" id="s-by"></div>
       </div>
     </div>
@@ -1255,19 +1255,19 @@ function loadSong(){
   const cover=song.c||(song.artists?.map(a=>a.name).join(', '))||'';
   const original=song.o||'';
   const uri=song.uri||null;
-  // Clear display first to avoid flash of stale content
+  // Clear display first
   $('s-name').textContent='Loading...';
   $('s-by').textContent='';
-  $('s-art').style.display='none';
-  $('s-art').src='';
+  $('s-art-wrap').textContent='🎵';
   $('ans-title').textContent='—';
   $('ans-cover').textContent='—';
   $('ans-original').textContent='—';
   chks={title:false,cover:false,original:false};
   ['title','cover','original'].forEach(k=>$('chk-'+k).className='chk');
 
-  // Small delay to let Spotify start before showing song info
-  // (prevents spoiling the answer before audio plays)
+  if(uri&&active)playTrack(uri);
+
+  // Reveal song info after short delay
   setTimeout(()=>{
     $('s-name').textContent=title;
     $('s-by').textContent='by '+cover;
@@ -1275,14 +1275,13 @@ function loadSong(){
     $('ans-cover').textContent=cover;
     $('ans-original').textContent=original;
   }, 800);
-
-  if(uri&&active)playTrack(uri);
 }
 
 function toggle(k){chks[k]=!chks[k];$('chk-'+k).className='chk'+(chks[k]?' on':'')}
 
 function nextSong(){
-  // Auto-resume if paused
+  // Always pause Spotify before advancing to prevent overlap
+  pauseSpotify();
   if(paused)resumeFromPause();
   const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
   const pts=t+cv+o;
@@ -1301,7 +1300,8 @@ function nextSong(){
   loadSong();
 }
 function skipSong(){
-  // Auto-resume if paused
+  // Always pause Spotify before advancing to prevent overlap
+  pauseSpotify();
   if(paused)resumeFromPause();
   roundStats.skips++;teamStats[currentTeamIdx].skips++;
   idx++;if(idx>=tracks.length){endRound();return}loadSong();
@@ -1557,12 +1557,10 @@ function resumeFromPause(){
   paused=false;
   // Restart timer
   timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
-  // Resume Spotify from current position
-  fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
-    method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
-  }).catch(()=>{});
   const btn=$('pause-btn');
   if(btn){btn.textContent='❚❚ Pause';btn.classList.remove('paused');}
+  // Note: Spotify playback is handled by the next loadSong() call
+  // which fires playTrack() with the new URI — no resume needed here
 }
 
 function confirmStop(){
