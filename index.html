@@ -660,8 +660,10 @@ async function beginRound(){
   }
   bar.className='turn-bar'+(currentTeamIdx%2===0?'':' b');
   teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i]});
-  carryOverSong=pendingCarryOver||null;
+  // Move pending carry-over queue into active carry-over queue for this round
+  carryOverQueue=[...pendingCarryOverQueue];
   pendingCarryOverQueue=[];
+  carryOverSong=null;
   loadSong();startTimer();
 }
 
