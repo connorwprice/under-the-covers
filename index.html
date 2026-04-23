@@ -774,13 +774,16 @@ async function prevSong(){
 }
 
 async function nextSong(){
+  // Capture the song being scored RIGHT NOW before anything changes
+  const scoredSong=currentSong?{...currentSong}:null;
+
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
   if(paused)resumeFromPause();
 
   // If we navigated back, return to the forward song first
   if(isNavigating && nextSongSlot){
-    // Score the prev song we went back to
+    // Score the prev song (scoredSong already captured above)
     const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
     const pts=t+cv+o;
     roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
@@ -791,14 +794,14 @@ async function nextSong(){
     roundPts+=pts;teamScores[currentTeamIdx]+=pts;
     const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
     // Update existing history entry for this song
-    const existing=songHistory.find(s=>s.title===currentSong?.title&&s.team===teamNames[currentTeamIdx]);
+    const existing=songHistory.find(s=>s.title===scoredSong?.title&&s.team===teamNames[currentTeamIdx]);
     if(existing){
       existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
       if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
       else if(pts===0)roundSongHistory.splice(roundSongHistory.indexOf(existing),1);
     }
-    if(pts===0&&currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri)){
-      pendingCarryOverQueue.push({...currentSong});
+    if(pts===0&&scoredSong&&!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri)){
+      pendingCarryOverQueue.push({...scoredSong});
     }
     carryOverSong=null;
     if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){winTriggeredBy=currentTeamIdx;roundsThisCycle=0;}
@@ -826,11 +829,11 @@ async function nextSong(){
   roundPts+=pts;teamScores[currentTeamIdx]+=pts;
   const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
 
-  // Track song history using currentSong (reliable) not DOM text
-  const songTitle=currentSong?.title||$('ans-title').textContent;
-  const songCover=currentSong?.cover||$('ans-cover').textContent;
-  const songOriginal=currentSong?.original||$('ans-original').textContent;
-  const songUri=currentSong?.uri||null;
+  // Track song history using scoredSong (captured before anything changed)
+  const songTitle=scoredSong?.title||'';
+  const songCover=scoredSong?.cover||'';
+  const songOriginal=scoredSong?.original||'';
+  const songUri=scoredSong?.uri||null;
 
   // Deduplicate — don't add same song twice (e.g. after prevSongData)
   // Only track history for non-navigation moves
@@ -856,9 +859,9 @@ async function nextSong(){
 
   // If 0 points scored, add to carry-over queue for next team
   // Never clear the queue — accumulate all unscored songs from this round
-  if(pts===0 && currentSong){
-    if(!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri&&s.title===currentSong.title)){
-      pendingCarryOverQueue.push({...currentSong});
+  if(pts===0 && scoredSong){
+    if(!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri&&s.title===scoredSong.title)){
+      pendingCarryOverQueue.push({...scoredSong});
     }
   }
   carryOverSong=null;
