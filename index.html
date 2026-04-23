@@ -429,7 +429,9 @@ let playedUris=new Set();
 let carryOverSong=null;
 let songHistory=[];
 let roundSongHistory=[];
-let prevSongs=[];
+let prevSongData=null;
+let nextSongSlot=null;
+let isNavigating=false;
 let currentSongChecks=null;
 // Win condition state
 let winTriggeredBy=-1;
@@ -629,9 +631,10 @@ async function beginRound(){
   roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
   // Reset per-round tracking
   roundSongHistory=[];
-  prevSongs=[];
+  prevSongData=null;nextSongSlot=null;isNavigating=false;
   currentSongChecks=null;
   currentSong=null;
+  prevSongData=null;nextSongSlot=null;isNavigating=false;
   const pb=$('prev-btn');if(pb)pb.disabled=true;
   // Pre-clear song card so nothing stale shows at round start
   $('s-name').textContent='Loading...';
@@ -661,7 +664,7 @@ async function beginRound(){
 
 function loadSong(fromPrev){
   // If there's a carry-over song and this is the first song of the round, use it
-  if(carryOverSong && !fromPrev && prevSongs.length===0){
+  if(carryOverSong && !fromPrev && prevSongData===null){
     const song=carryOverSong;
     carryOverSong=null;
     displaySong(song, true); // true = isCarryOver, don't advance idx
@@ -685,23 +688,23 @@ function displaySong(song, isCarryOver){
   const original=song.o||'';
   const uri=song.uri||null;
 
-  // Push current song to prev stack BEFORE switching
-  if(currentSong!==null){
-    prevSongs.push({
+  // When moving forward normally (not navigating), save current as prevSongData
+  if(!isNavigating && currentSong!==null){
+    prevSongData={
       title:currentSong.title,cover:currentSong.cover,
       original:currentSong.original,uri:currentSong.uri,
       savedChecks:{...chks}
-    });
-    if(prevSongs.length>10)prevSongs.shift();
+    };
+    nextSongSlot=null; // clear forward slot when moving forward
   }
 
   // Update current song reference
   currentSong={title,cover,original,uri};
   currentSongChecks={title:false,cover:false,original:false};
 
-  // Enable/disable prev button
+  // Prev button enabled only if prevSongData exists AND not already navigated back
   const pb=$('prev-btn');
-  if(pb)pb.disabled=prevSongs.length===0;
+  if(pb)pb.disabled=prevSongData===null||isNavigating;
 
   // Clear display
   $('s-name').textContent='Loading...';
@@ -727,34 +730,82 @@ function displaySong(song, isCarryOver){
 function toggle(k){chks[k]=!chks[k];$('chk-'+k).className='chk'+(chks[k]?' on':'')}
 
 async function prevSong(){
-  if(prevSongs.length===0)return;
+  if(!prevSongData||isNavigating)return;
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
-  const prev=prevSongs.pop();
-  // Restore current song ref WITHOUT pushing to prev stack again
+
+  // Save current song as the "next" slot so we can return to it
+  nextSongSlot={
+    title:currentSong.title,cover:currentSong.cover,
+    original:currentSong.original,uri:currentSong.uri,
+    savedChecks:{...chks}
+  };
+
+  // Set navigating flag — prevents history tracking and disables prev
+  isNavigating=true;
+
+  const prev=prevSongData;
+
+  // Restore display WITHOUT triggering displaySong (to avoid side effects)
   currentSong={title:prev.title,cover:prev.cover,original:prev.original,uri:prev.uri};
-  // Restore display
   $('s-name').textContent=prev.title;
   $('s-by').textContent='by '+prev.cover;
   $('ans-title').textContent=prev.title;
   $('ans-cover').textContent=prev.cover;
   $('ans-original').textContent=prev.original;
-  // Restore checkboxes
   chks={...prev.savedChecks};
   ['title','cover','original'].forEach(k=>{
     $('chk-'+k).className='chk'+(chks[k]?' on':'');
   });
   currentSongChecks={...prev.savedChecks};
+
+  // Gray out prev button — only 1 back allowed
   const pb=$('prev-btn');
-  if(pb)pb.disabled=prevSongs.length===0;
+  if(pb)pb.disabled=true;
+
   if(prev.uri&&active)playTrack(prev.uri);
 }
 
 async function nextSong(){
-  // Stop current track first, wait for it to actually stop
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
   if(paused)resumeFromPause();
+
+  // If we navigated back, return to the forward song first
+  if(isNavigating && nextSongSlot){
+    // Score the prev song we went back to
+    const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
+    const pts=t+cv+o;
+    roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
+    roundStats.points+=pts;roundStats.songs++;
+    teamStats[currentTeamIdx].titles+=t;teamStats[currentTeamIdx].covers+=cv;
+    teamStats[currentTeamIdx].originals+=o;teamStats[currentTeamIdx].points+=pts;
+    teamStats[currentTeamIdx].songs++;
+    roundPts+=pts;teamScores[currentTeamIdx]+=pts;
+    const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
+    // Update existing history entry for this song
+    const existing=songHistory.find(s=>s.title===currentSong?.title&&s.team===teamNames[currentTeamIdx]);
+    if(existing){
+      existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
+      if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
+    }
+    if(pts===0&&currentSong)carryOverSong={...currentSong};
+    else carryOverSong=null;
+    if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){winTriggeredBy=currentTeamIdx;roundsThisCycle=0;}
+    // Return to forward song
+    isNavigating=false;
+    const fwd=nextSongSlot;nextSongSlot=null;
+    // Restore forward song display
+    currentSong={title:fwd.title,cover:fwd.cover,original:fwd.original,uri:fwd.uri};
+    $('s-name').textContent=fwd.title;$('s-by').textContent='by '+fwd.cover;
+    $('ans-title').textContent=fwd.title;$('ans-cover').textContent=fwd.cover;$('ans-original').textContent=fwd.original;
+    chks={...fwd.savedChecks};
+    ['title','cover','original'].forEach(k=>$('chk-'+k).className='chk'+(chks[k]?' on':''));
+    const pb=$('prev-btn');if(pb)pb.disabled=prevSongData===null;
+    if(fwd.uri&&active)playTrack(fwd.uri);
+    return;
+  }
+
   const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
   const pts=t+cv+o;
   roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
@@ -771,24 +822,27 @@ async function nextSong(){
   const songOriginal=currentSong?.original||$('ans-original').textContent;
   const songUri=currentSong?.uri||null;
 
-  // Deduplicate — don't add same song twice (e.g. after prevSong)
-  const alreadyInHistory=songHistory.some(s=>
-    s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
-  if(!alreadyInHistory){
-    const songEntry={title:songTitle,cover:songCover,original:songOriginal,
-      uri:songUri,team:teamNames[currentTeamIdx],pts,
-      checks:{title:!!t,cover:!!cv,original:!!o}};
-    songHistory.push(songEntry);
-    // Only add to roundSongHistory if scored (shown between rounds)
-    if(pts>0)roundSongHistory.push(songEntry);
-  } else if(pts>0){
-    // Update existing entry if now scored (prevSong then scored)
-    const existing=songHistory.find(s=>s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
-    if(existing){
-      existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-      if(!roundSongHistory.includes(existing))roundSongHistory.push(existing);
+  // Deduplicate — don't add same song twice (e.g. after prevSongData)
+  // Only track history for non-navigation moves
+  if(!isNavigating){
+    const alreadyInHistory=songHistory.some(s=>
+      s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
+    if(!alreadyInHistory){
+      const songEntry={title:songTitle,cover:songCover,original:songOriginal,
+        uri:songUri,team:teamNames[currentTeamIdx],pts,
+        checks:{title:!!t,cover:!!cv,original:!!o}};
+      songHistory.push(songEntry);
+      if(pts>0)roundSongHistory.push(songEntry);
+    } else if(pts>0){
+      const existing=songHistory.find(s=>s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
+      if(existing){
+        existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
+        if(!roundSongHistory.includes(existing))roundSongHistory.push(existing);
+      }
     }
   }
+  // Clear navigation state after normal next
+  isNavigating=false;
 
   // If 0 points scored, carry current song to next team
   if(pts===0 && currentSong){
@@ -838,6 +892,7 @@ function showGracePeriod(){
   document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{
     if(el)el.disabled=true;
   });
+  const pbGrace=$('prev-btn');if(pbGrace)pbGrace.disabled=true;
 
   const bar=$('turn-bar');
   bar.style.background='#c0392b';bar.style.color='#fff';
@@ -853,7 +908,7 @@ function showGracePeriod(){
       document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{
         if(el)el.disabled=false;
       });
-      const pb=$('prev-btn');if(pb)pb.disabled=prevSongs.length===0;
+      const pb=$('prev-btn');if(pb)pb.disabled=prevSongData===null||isNavigating;
       endRound();
       return;
     }
@@ -1068,7 +1123,7 @@ async function playAgain(){
   currentTeamIdx=0;winTriggeredBy=-1;roundNumber=1;teamsPlayedThisRound=0;
   activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
   activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
-  playedUris=new Set();carryOverSong=null;songHistory=[];roundSongHistory=[];prevSongs=[];currentSongChecks=null;shuffle(tracks);idx=0;
+  playedUris=new Set();carryOverSong=null;songHistory=[];roundSongHistory=[];prevSongData=null;nextSongSlot=null;isNavigating=false;currentSongChecks=null;shuffle(tracks);idx=0;
   renderScoreHeader();showScreen('game');await beginRound();
 }
 
