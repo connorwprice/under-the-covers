@@ -636,8 +636,18 @@ async function beginRound(){
   prevSongData=null;nextSongSlot=null;isNavigating=false;
   currentSongChecks=null;
   currentSong=null;
-  prevSongData=null;nextSongSlot=null;isNavigating=false;
   const pb=$('prev-btn');if(pb)pb.disabled=true;
+
+  // Rebuild playedUris from full game history so no song ever replays
+  songHistory.forEach(s=>{
+    if(s.uri)playedUris.add(s.uri);
+    if(s.title)playedUris.add(s.title);
+  });
+  // Also mark carry-over songs (heard but unscored) as played
+  pendingCarryOverQueue.forEach(s=>{
+    if(s.uri)playedUris.add(s.uri);
+    if(s.t)playedUris.add(s.t);
+  });
   // Pre-clear song card so nothing stale shows at round start
   $('s-name').textContent='Loading...';
   $('s-by').textContent='';
@@ -668,22 +678,23 @@ async function beginRound(){
 }
 
 
+function songKey(s){return s.uri||s.t||s.title||''}
+function isPlayed(s){return playedUris.has(s.uri)||playedUris.has(s.t)||playedUris.has(s.title)||playedUris.has(songKey(s))}
+
 function loadSong(fromPrev){
   // Play carry-over songs first (queue of unscored songs from prev team)
   if(!fromPrev && prevSongData===null && carryOverQueue.length>0){
     const song=carryOverQueue.shift();
     // Mark as played so it doesn't repeat in normal queue
-    if(song.uri)playedUris.add(song.uri);
-    if(song.t)playedUris.add(song.t);
+    playedUris.add(song.uri||song.t||song.title||songKey(song));
     displaySong(song, true);
     return;
   }
   // Skip already-played songs
-  while(idx<tracks.length && (playedUris.has(tracks[idx].uri)||playedUris.has(tracks[idx].t)||playedUris.has(tracks[idx].title))){idx++}
+  while(idx<tracks.length && isPlayed(tracks[idx])){idx++}
   if(idx>=tracks.length){endRound();return}
   const song=tracks[idx];
-  if(song.uri)playedUris.add(song.uri);
-  if(song.t)playedUris.add(song.t);
+  playedUris.add(song.uri||song.t||song.title||songKey(song));
   idx++;
   displaySong(song, false);
 }
@@ -779,8 +790,7 @@ async function nextSong(){
   // Capture the song being scored RIGHT NOW before anything changes
   const scoredSong=currentSong?{...currentSong}:null;
   // Ensure scored song stays in playedUris so it never replays for any team
-  if(scoredSong?.uri)playedUris.add(scoredSong.uri);
-  if(scoredSong?.title)playedUris.add(scoredSong.title);
+  if(scoredSong)playedUris.add(scoredSong.uri||scoredSong.title||songKey(scoredSong));
 
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
@@ -975,8 +985,7 @@ function endRound(){
         uri:currentSong.uri,team:teamNames[currentTeamIdx],pts:gracePts,
         checks:{title:!!t,cover:!!cv,original:!!o}};
       // Keep scored song in playedUris
-      if(currentSong.uri)playedUris.add(currentSong.uri);
-      if(currentSong.title)playedUris.add(currentSong.title);
+      playedUris.add(currentSong.uri||currentSong.title||songKey(currentSong));
       songHistory.push(entry);
       if(gracePts>0)roundSongHistory.push(entry);
       // Check win trigger
