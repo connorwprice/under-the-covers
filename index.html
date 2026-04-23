@@ -1145,10 +1145,15 @@ function renderStats(){
     '</div>';
 
   // ── Per-team song tables ──
+  // Between rounds: only show scored songs from this turn (roundSongHistory)
+  // End of game: show all songs ever played (songHistory)
+  const sourceHistory=gameOver?songHistory:roundSongHistory;
+
   const byTeam={};
-  songHistory.forEach(s=>{
+  sourceHistory.forEach(s=>{
     if(!byTeam[s.team])byTeam[s.team]=[];
-    byTeam[s.team].push(s);
+    // Extra guard: never show 0-pt songs between rounds
+    if(gameOver||s.pts>0)byTeam[s.team].push(s);
   });
 
   teamNames.forEach((name,i)=>{
