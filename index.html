@@ -427,7 +427,8 @@ let currentTeamIdx=0;
 let roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
 let playedUris=new Set();
 let carryOverSong=null;
-let pendingCarryOver=null; // applied only at start of NEXT team's round
+let carryOverQueue=[];
+let pendingCarryOverQueue=[]; // queue of 0-pt songs for next team's turn
 let songHistory=[];
 let roundSongHistory=[];
 let prevSongData=null;
@@ -660,17 +661,18 @@ async function beginRound(){
   bar.className='turn-bar'+(currentTeamIdx%2===0?'':' b');
   teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i]});
   carryOverSong=pendingCarryOver||null;
-  pendingCarryOver=null;
+  pendingCarryOverQueue=[];
   loadSong();startTimer();
 }
 
 
 function loadSong(fromPrev){
-  // If there's a carry-over song and this is the first song of the round, use it
-  if(carryOverSong && !fromPrev && prevSongData===null){
-    const song=carryOverSong;
-    carryOverSong=null;
-    displaySong(song, true); // true = isCarryOver, don't advance idx
+  // Play carry-over songs first (queue of unscored songs from prev team)
+  if(!fromPrev && prevSongData===null && carryOverQueue.length>0){
+    const song=carryOverQueue.shift();
+    // Mark as played so it doesn't repeat
+    playedUris.add(song.uri||song.t);
+    displaySong(song, true);
     return;
   }
   // Skip already-played songs
@@ -791,9 +793,10 @@ async function nextSong(){
     if(existing){
       existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
       if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
+      else if(pts===0)roundSongHistory.splice(roundSongHistory.indexOf(existing),1);
     }
-    if(pts===0&&currentSong)pendingCarryOver={...currentSong};
-    else pendingCarryOver=null;
+    if(pts===0&&currentSong)if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri))pendingCarryOverQueue.push({...currentSong});
+    else pendingCarryOverQueue=[];
     carryOverSong=null;
     if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){winTriggeredBy=currentTeamIdx;roundsThisCycle=0;}
     // Return to forward song
@@ -850,9 +853,9 @@ async function nextSong(){
 
   // If 0 points scored, save for NEXT team's round (not current team)
   if(pts===0 && currentSong){
-    pendingCarryOver={...currentSong};
+    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri))pendingCarryOverQueue.push({...currentSong});
   } else {
-    pendingCarryOver=null;
+    pendingCarryOverQueue=[];
   }
   carryOverSong=null; // never use carry-over mid-round
 
@@ -876,7 +879,8 @@ function startTimer(){
       const curOriginal=$('ans-original').textContent;
       if(curTitle&&curTitle!=='—'&&curTitle!=='Loading...'){
         const curSong=tracks.find(s=>(s.t||s.name)===curTitle);
-        pendingCarryOver={t:curTitle,c:curCover,o:curOriginal,uri:curSong?.uri||null};
+        const coSong={t:curTitle,c:curCover,o:curOriginal,uri:curSong?.uri||null};
+        if(!pendingCarryOverQueue.some(s=>s.uri===coSong.uri))pendingCarryOverQueue.push(coSong);
         carryOverSong=null;
       }
       // 5-second grace period — show scoring table with countdown
@@ -959,7 +963,7 @@ function endRound(){
         uri:currentSong.uri,team:teamNames[currentTeamIdx],pts:gracePts,
         checks:{title:!!t,cover:!!cv,original:!!o}};
       songHistory.push(entry);
-      roundSongHistory.push(entry);
+      if(gracePts>0)roundSongHistory.push(entry);
       // Check win trigger
       if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){
         winTriggeredBy=currentTeamIdx;roundsThisCycle=0;
@@ -977,7 +981,7 @@ function endRound(){
     }
   } else if(gracePts===0&&currentSong){
     // Song at round end was unscored — carry it over
-    pendingCarryOver={...currentSong};
+    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri))pendingCarryOverQueue.push({...currentSong});
   }
 
   teamStats[currentTeamIdx].rounds++;
@@ -1021,16 +1025,41 @@ function endRound(){
   const btn=$('next-turn-btn');
 
   // Go straight to stats page — skip intermediate screen
+  // Ensure roundSongHistory only has scored songs
+  roundSongHistory=roundSongHistory.filter(s=>s.pts>0);
   viewStats('roundend');
 }
 async function nextTurn(){
   teamsPlayedThisRound++;
   const roundComplete=activeTeamIndices.length===1||teamsPlayedThisRound>=activeTeamIndices.length;
+
   if(roundComplete){
     roundNumber++;teamsPlayedThisRound=0;
-    // Solo play — check win at end of round
-    if(teamNames.length===1&&winTriggeredBy!==-1){
-      showWinner();return;
+
+    // Check win condition — someone hit winPts
+    if(winTriggeredBy!==-1){
+      const winScore=teamScores[winTriggeredBy];
+      const otherScores=activeTeamIndices.filter(i=>i!==winTriggeredBy).map(i=>teamScores[i]);
+      const maxOther=otherScores.length>0?Math.max(...otherScores):0;
+
+      // Solo play — win immediately
+      if(teamNames.length===1){showWinner();return;}
+
+      // Multi-team — must win by 3
+      if(winScore-maxOther>=3){showWinner();return;}
+
+      // Not enough lead — check eliminations
+      const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
+      const toEliminate=activeTeamIndices.filter(i=>topScore-teamScores[i]>3);
+      if(toEliminate.length>0&&toEliminate.length<activeTeamIndices.length){
+        activeTeamIndices=activeTeamIndices.filter(i=>!toEliminate.includes(i));
+        if(activeTeamIndices.length===1){showWinner();return;}
+        showEliminationScreen(toEliminate);
+        winTriggeredBy=-1;
+        return;
+      }
+      // No elimination — reset trigger and keep playing
+      winTriggeredBy=-1;
     }
   }
 
@@ -1075,7 +1104,7 @@ async function playAgain(){
   currentTeamIdx=0;winTriggeredBy=-1;roundNumber=1;teamsPlayedThisRound=0;
   activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
   activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
-  playedUris=new Set();carryOverSong=null;pendingCarryOver=null;songHistory=[];roundSongHistory=[];prevSongData=null;nextSongSlot=null;isNavigating=false;currentSongChecks=null;shuffle(tracks);idx=0;
+  playedUris=new Set();carryOverSong=null;carryOverQueue=[];pendingCarryOverQueue=[];songHistory=[];roundSongHistory=[];prevSongData=null;nextSongSlot=null;isNavigating=false;currentSongChecks=null;shuffle(tracks);idx=0;
   renderScoreHeader();showScreen('game');await beginRound();
 }
 
