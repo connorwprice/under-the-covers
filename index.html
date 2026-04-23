@@ -1555,27 +1555,31 @@ function togglePause(){
   paused=!paused;
   const btn=$('pause-btn');
   if(paused){
+    // Pausing
     clearInterval(timer);timer=null;
     pauseSpotify();
     btn.textContent='▶ Resume';
     btn.classList.add('paused');
   } else {
-    resumeFromPause();
+    // Resuming — restart timer and Spotify
+    timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
+    fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
+      method:'PUT',
+      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
+    }).catch(()=>{});
+    btn.textContent='❚❚ Pause';
+    btn.classList.remove('paused');
   }
 }
 
 function resumeFromPause(){
+  // Called when Skip/Next pressed while paused — just restarts timer
+  // Spotify is handled by the subsequent playTrack() call in loadSong()
   if(!paused)return;
   paused=false;
-  // Restart timer
   timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
   const btn=$('pause-btn');
   if(btn){btn.textContent='❚❚ Pause';btn.classList.remove('paused');}
-  // Resume Spotify from where it was paused (empty body = resume, not restart)
-  fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
-    method:'PUT',
-    headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
-  }).catch(()=>{});
 }
 
 function confirmStop(){
