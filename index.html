@@ -765,14 +765,30 @@ async function nextSong(){
   roundPts+=pts;teamScores[currentTeamIdx]+=pts;
   const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
 
-  // Track song history
-  const curTitle=$('ans-title').textContent;
-  const curCover=$('ans-cover').textContent;
-  const curOriginal=$('ans-original').textContent;
-  const songEntry={title:curTitle,cover:curCover,original:curOriginal,
-    team:teamNames[currentTeamIdx],pts,checks:{title:!!t,cover:!!cv,original:!!o}};
-  songHistory.push(songEntry);
-  roundSongHistory.push(songEntry);
+  // Track song history using currentSong (reliable) not DOM text
+  const songTitle=currentSong?.title||$('ans-title').textContent;
+  const songCover=currentSong?.cover||$('ans-cover').textContent;
+  const songOriginal=currentSong?.original||$('ans-original').textContent;
+  const songUri=currentSong?.uri||null;
+
+  // Deduplicate — don't add same song twice (e.g. after prevSong)
+  const alreadyInHistory=songHistory.some(s=>
+    s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
+  if(!alreadyInHistory){
+    const songEntry={title:songTitle,cover:songCover,original:songOriginal,
+      uri:songUri,team:teamNames[currentTeamIdx],pts,
+      checks:{title:!!t,cover:!!cv,original:!!o}};
+    songHistory.push(songEntry);
+    // Only add to roundSongHistory if scored (shown between rounds)
+    if(pts>0)roundSongHistory.push(songEntry);
+  } else if(pts>0){
+    // Update existing entry if now scored (prevSong then scored)
+    const existing=songHistory.find(s=>s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
+    if(existing){
+      existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
+      if(!roundSongHistory.includes(existing))roundSongHistory.push(existing);
+    }
+  }
 
   // If 0 points scored, carry current song to next team
   if(pts===0 && currentSong){
@@ -812,32 +828,42 @@ function startTimer(){
 
 let graceTimer=null;
 function showGracePeriod(){
+  // Clear any existing grace timer
+  if(graceTimer){clearInterval(graceTimer);graceTimer=null;}
+
   active=false;
   pauseSpotify();
-  // Disable all action buttons — only checkboxes remain active
-  ['next-btn','prev-btn','pause-btn'].forEach(id=>{
-    const el=document.getElementById(id)||document.querySelector('.'+id);
+
+  // Disable action buttons — only checkboxes stay active
+  document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{
     if(el)el.disabled=true;
   });
-  document.querySelectorAll('.next-btn,.stop-btn,.pause-btn').forEach(el=>el.disabled=true);
+
+  const bar=$('turn-bar');
+  bar.style.background='#c0392b';bar.style.color='#fff';
 
   let graceLeft=5;
-  $('t-num').textContent='⏱';
-  const bar=$('turn-bar');
-  bar.textContent="Time's Up! Score now: "+graceLeft+"s";
-  bar.style.background='#c0392b';bar.style.color='#fff';
-  graceTimer=setInterval(()=>{
-    graceLeft--;
-    bar.textContent="Time's Up! Score now: "+graceLeft+"s";
+
+  function tick(){
     if(graceLeft<=0){
-      clearInterval(graceTimer);
+      if(graceTimer){clearInterval(graceTimer);graceTimer=null;}
       bar.style.background='';bar.style.color='';
+      bar.textContent='';
       // Re-enable buttons
-      document.querySelectorAll('.next-btn,.stop-btn,.pause-btn').forEach(el=>el.disabled=false);
+      document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{
+        if(el)el.disabled=false;
+      });
       const pb=$('prev-btn');if(pb)pb.disabled=prevSongs.length===0;
       endRound();
+      return;
     }
-  },1000);
+    $('t-num').textContent=graceLeft;
+    bar.textContent="Time's Up! Score now: "+graceLeft+"s";
+    graceLeft--;
+  }
+
+  tick(); // run immediately so we see 5 right away
+  graceTimer=setInterval(tick,1000);
 }
 function stopTimer(){
   clearInterval(timer);timer=null;
