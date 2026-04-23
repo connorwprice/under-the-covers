@@ -795,8 +795,9 @@ async function nextSong(){
       if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
       else if(pts===0)roundSongHistory.splice(roundSongHistory.indexOf(existing),1);
     }
-    if(pts===0&&currentSong)if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri))pendingCarryOverQueue.push({...currentSong});
-    else pendingCarryOverQueue=[];
+    if(pts===0&&currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri)){
+      pendingCarryOverQueue.push({...currentSong});
+    }
     carryOverSong=null;
     if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){winTriggeredBy=currentTeamIdx;roundsThisCycle=0;}
     // Return to forward song
@@ -844,20 +845,21 @@ async function nextSong(){
       const existing=songHistory.find(s=>s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
       if(existing){
         existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-        if(!roundSongHistory.includes(existing))roundSongHistory.push(existing);
+        if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
       }
     }
   }
   // Clear navigation state after normal next
   isNavigating=false;
 
-  // If 0 points scored, save for NEXT team's round (not current team)
+  // If 0 points scored, add to carry-over queue for next team
+  // Never clear the queue — accumulate all unscored songs from this round
   if(pts===0 && currentSong){
-    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri))pendingCarryOverQueue.push({...currentSong});
-  } else {
-    pendingCarryOverQueue=[];
+    if(!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri&&s.title===currentSong.title)){
+      pendingCarryOverQueue.push({...currentSong});
+    }
   }
-  carryOverSong=null; // never use carry-over mid-round
+  carryOverSong=null;
 
   // Check win trigger
   if(teamScores[currentTeamIdx]>=winPts && winTriggeredBy===-1){
@@ -981,7 +983,9 @@ function endRound(){
     }
   } else if(gracePts===0&&currentSong){
     // Song at round end was unscored — carry it over
-    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri))pendingCarryOverQueue.push({...currentSong});
+    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri&&s.title===currentSong.title)){
+      pendingCarryOverQueue.push({...currentSong});
+    }
   }
 
   teamStats[currentTeamIdx].rounds++;
