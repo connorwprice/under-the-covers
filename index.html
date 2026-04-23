@@ -296,7 +296,10 @@
   <div class="re-summary" id="re-summary"></div>
   <div class="scoreboard" id="re-board"></div>
   <button class="continue-btn" id="next-turn-btn" onclick="nextTurn()">Next Team's Turn &#9654;</button>
-  <button class="again-btn" style="margin-top:.75rem;border-color:#888;color:#888;font-size:.82rem;padding:10px" onclick="viewStats('roundend')">View Stats</button>
+  <div style="display:flex;gap:.75rem;margin-top:.75rem">
+    <button class="again-btn" style="border-color:#888;color:#888;font-size:.82rem;padding:10px;flex:1" onclick="viewStats('roundend')">View Stats</button>
+    <button class="again-btn" style="border-color:#c0392b;color:#c0392b;font-size:.82rem;padding:10px;flex:1" onclick="confirmStop()">&#9632; Stop Game</button>
+  </div>
 </div>
 
 <!-- ELIMINATION -->
@@ -1176,10 +1179,24 @@ async function startGame(){
   showScreen('game');
   setStatus('Finding Spotify device...');
 
-  if(usingSpotify){
+  // Load from Google Sheet — fall back to TRACKS only if sheet fails
+  setStatus('Loading songs...');
+  try{
+    const sheetSongs=await fetchSheet();
+    if(sheetSongs&&sheetSongs.length>0){
+      tracks=sheetSongs.filter(s=>s.status==='approved'&&s.uri&&s.original)
+        .map(s=>({t:s.title,c:s.cover,o:s.original,uri:s.uri}));
+      setStatus('Loaded '+tracks.length+' songs.');
+    } else {
+      throw new Error('Empty sheet');
+    }
+  }catch(e){
+    console.warn('Sheet load failed, using built-in:',e.message);
     tracks=[...TRACKS];
-    await initPlayer();
+    setStatus('Using built-in song list.');
   }
+
+  await initPlayer();
 
   shuffle(tracks);idx=0;
   setStatus('');
@@ -1208,10 +1225,14 @@ async function beginRound(){
   const btn=$('next-turn-btn');if(btn)btn.style.display='';
   if(usingSpotify) await initPlayer();
   const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
-  const scorekeeperPos=(currentPos+1)%activeTeamIndices.length;
-  const scorekeeperIdx=activeTeamIndices[scorekeeperPos];
   const bar=$('turn-bar');
-  bar.textContent=`${teamNames[currentTeamIdx]}'s Turn — Scorekeeper: ${teamNames[scorekeeperIdx]}`;
+  if(teamNames.length===1){
+    bar.textContent=`${teamNames[currentTeamIdx]}'s Turn`;
+  } else {
+    const scorekeeperPos=(currentPos+1)%activeTeamIndices.length;
+    const scorekeeperIdx=activeTeamIndices[scorekeeperPos];
+    bar.textContent=`${teamNames[currentTeamIdx]}'s Turn — Scorekeeper: ${teamNames[scorekeeperIdx]}`;
+  }
   bar.className='turn-bar'+(currentTeamIdx%2===0?'':' b');
   teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i]});
   loadSong();startTimer();
@@ -1322,6 +1343,11 @@ function endRound(){
   const isRoundEnd=(teamsPlayedThisRound+1)>=activeTeamIndices.length;
   const btn=$('next-turn-btn');
 
+  // Solo play — next turn button says "Next Round"
+  if(teamNames.length===1){
+    if(btn){btn.textContent='Start Round '+(roundNumber+1)+' ►';btn.style.display='';}
+    showScreen('roundend');return;
+  }
   if(isRoundEnd && winTriggeredBy!==-1){
     // Round is complete AND win was triggered — check outcomes
     const winScore=teamScores[winTriggeredBy];
@@ -1372,7 +1398,7 @@ function endRound(){
 }
 async function nextTurn(){
   teamsPlayedThisRound++;
-  const roundComplete=teamsPlayedThisRound>=activeTeamIndices.length;
+  const roundComplete=activeTeamIndices.length===1||teamsPlayedThisRound>=activeTeamIndices.length;
   if(roundComplete){roundNumber++;teamsPlayedThisRound=0;}
 
   // Advance to next ACTIVE team
@@ -1533,7 +1559,7 @@ function confirmStop(){
 
 // ── SETUP HELPERS ──
 function changeTeamCount(delta){
-  teamCount=Math.min(8,Math.max(2,teamCount+delta));
+  teamCount=Math.min(8,Math.max(1,teamCount+delta));
   $('team-count-display').textContent=teamCount;
   renderTeamInputs();
 }
