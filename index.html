@@ -679,7 +679,7 @@ function loadSong(fromPrev){
     return;
   }
   // Skip already-played songs
-  while(idx<tracks.length && (playedUris.has(tracks[idx].uri)||playedUris.has(tracks[idx].t))){idx++}
+  while(idx<tracks.length && (playedUris.has(tracks[idx].uri)||playedUris.has(tracks[idx].t)||playedUris.has(tracks[idx].title))){idx++}
   if(idx>=tracks.length){endRound();return}
   const song=tracks[idx];
   if(song.uri)playedUris.add(song.uri);
@@ -778,6 +778,9 @@ async function prevSong(){
 async function nextSong(){
   // Capture the song being scored RIGHT NOW before anything changes
   const scoredSong=currentSong?{...currentSong}:null;
+  // Ensure scored song stays in playedUris so it never replays for any team
+  if(scoredSong?.uri)playedUris.add(scoredSong.uri);
+  if(scoredSong?.title)playedUris.add(scoredSong.title);
 
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
@@ -799,8 +802,7 @@ async function nextSong(){
     const existing=songHistory.find(s=>s.title===scoredSong?.title&&s.team===teamNames[currentTeamIdx]);
     if(existing){
       existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-      if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
-      else if(pts===0)roundSongHistory.splice(roundSongHistory.indexOf(existing),1);
+      if(pts>0&&!roundSongHistory.some(s=>s===existing))roundSongHistory.push(existing);
     }
     if(pts===0&&scoredSong&&!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri)){
       pendingCarryOverQueue.push({t:scoredSong.title,c:scoredSong.cover,o:scoredSong.original,uri:scoredSong.uri});
@@ -847,12 +849,12 @@ async function nextSong(){
         uri:songUri,team:teamNames[currentTeamIdx],pts,
         checks:{title:!!t,cover:!!cv,original:!!o}};
       songHistory.push(songEntry);
-      if(pts>0)roundSongHistory.push(songEntry);
+      if(pts>0)roundSongHistory.push(songEntry); // scored only
     } else if(pts>0){
       const existing=songHistory.find(s=>s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
       if(existing){
         existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-        if(pts>0&&!roundSongHistory.includes(existing))roundSongHistory.push(existing);
+        if(pts>0&&!roundSongHistory.some(s=>s===existing))roundSongHistory.push(existing);
       }
     }
   }
@@ -972,6 +974,9 @@ function endRound(){
       const entry={title:currentSong.title,cover:currentSong.cover,original:currentSong.original,
         uri:currentSong.uri,team:teamNames[currentTeamIdx],pts:gracePts,
         checks:{title:!!t,cover:!!cv,original:!!o}};
+      // Keep scored song in playedUris
+      if(currentSong.uri)playedUris.add(currentSong.uri);
+      if(currentSong.title)playedUris.add(currentSong.title);
       songHistory.push(entry);
       if(gracePts>0)roundSongHistory.push(entry);
       // Check win trigger
@@ -1147,13 +1152,16 @@ function renderStats(){
   // ── Per-team song tables ──
   // Between rounds: only show scored songs from this turn (roundSongHistory)
   // End of game: show all songs ever played (songHistory)
-  const sourceHistory=gameOver?songHistory:roundSongHistory;
+  // Between rounds: scored songs this turn only
+  // End of game: all songs (scored + unscored)
+  const sourceHistory=gameOver
+    ? songHistory
+    : roundSongHistory.filter(s=>s.pts>0);
 
   const byTeam={};
   sourceHistory.forEach(s=>{
     if(!byTeam[s.team])byTeam[s.team]=[];
-    // Extra guard: never show 0-pt songs between rounds
-    if(gameOver||s.pts>0)byTeam[s.team].push(s);
+    byTeam[s.team].push(s);
   });
 
   teamNames.forEach((name,i)=>{
