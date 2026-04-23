@@ -1147,10 +1147,12 @@ async function playTrack(uri){
 
 async function pauseSpotify(){
   try{
-    await fetch('https://api.spotify.com/v1/me/player/pause',{
+    const r=await fetch('https://api.spotify.com/v1/me/player/pause',{
       method:'PUT',
       headers:{Authorization:'Bearer '+token}
     });
+    // Give Spotify a moment to actually stop
+    if(r.ok||r.status===204)await new Promise(res=>setTimeout(res,150));
   }catch(e){}
 }
 function setStatus(m){$('playback-status').textContent=m}
@@ -1222,6 +1224,14 @@ function renderScoreHeader(){
 async function beginRound(){
   roundPts=0;active=true;
   roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
+  // Pre-clear song card so nothing stale shows at round start
+  $('s-name').textContent='Loading...';
+  $('s-by').textContent='';
+  $('s-art-wrap').textContent='🎵';
+  $('ans-title').textContent='—';
+  $('ans-cover').textContent='—';
+  $('ans-original').textContent='—';
+  ['title','cover','original'].forEach(k=>{const el=$('chk-'+k);if(el)el.className='chk'});
   // Reset next-turn button visibility
   const btn=$('next-turn-btn');if(btn)btn.style.display='';
   if(usingSpotify) await initPlayer();
@@ -1279,9 +1289,10 @@ function loadSong(){
 
 function toggle(k){chks[k]=!chks[k];$('chk-'+k).className='chk'+(chks[k]?' on':'')}
 
-function nextSong(){
-  // Always pause Spotify before advancing to prevent overlap
-  pauseSpotify();
+async function nextSong(){
+  // Stop current track first, wait for it to actually stop
+  await pauseSpotify();
+  await new Promise(res=>setTimeout(res,300));
   if(paused)resumeFromPause();
   const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
   const pts=t+cv+o;
@@ -1299,9 +1310,10 @@ function nextSong(){
   idx++;
   loadSong();
 }
-function skipSong(){
-  // Always pause Spotify before advancing to prevent overlap
-  pauseSpotify();
+async function skipSong(){
+  // Stop current track first, wait for it to actually stop
+  await pauseSpotify();
+  await new Promise(res=>setTimeout(res,300));
   if(paused)resumeFromPause();
   roundStats.skips++;teamStats[currentTeamIdx].skips++;
   idx++;if(idx>=tracks.length){endRound();return}loadSong();
