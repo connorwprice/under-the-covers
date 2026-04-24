@@ -807,15 +807,17 @@ function recordSong(song,pts,t,cv,o){
   // Avoid duplicate entries for same song+team
   const existing=songHistory.find(s=>s.uri===song.uri&&s.team===teamNames[currentTeamIdx]);
   if(existing){
-    // Update if pts improved
-    if(pts>existing.pts){
-      existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-      // Update team score delta
-      const diff=pts-existing.pts;
-      if(diff>0){
-        teamScores[currentTeamIdx]+=diff;
-        roundPts+=diff;
-        const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
+    // Update score if pts changed
+    if(pts!==existing.pts){
+      const diff=pts-existing.pts; // calculate diff BEFORE updating existing.pts
+      existing.pts=pts;
+      existing.checks={title:!!t,cover:!!cv,original:!!o};
+      teamScores[currentTeamIdx]+=diff;
+      roundPts+=diff;
+      const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
+      // Check win trigger
+      if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){
+        winTriggeredBy=currentTeamIdx;
       }
     }
     return;
