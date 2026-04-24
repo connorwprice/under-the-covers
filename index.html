@@ -899,33 +899,37 @@ function endRound(){
     recordSong(currentSong,pts,t,cv,o);
   }
 
+  // Increment now so we can check if round is complete
+  teamsPlayedThisRound++;
+  const roundComplete=teamsPlayedThisRound>=activeTeamIndices.length;
+
+  if(roundComplete){
+    // Solo win
+    if(teamNames.length===1&&teamScores[0]>=winPts){showWinner();return;}
+
+    // Multi-team: check if leader has hit winPts and leads by 3+
+    if(winTriggeredBy!==-1){
+      const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
+      const topIdx=activeTeamIndices.reduce((a,b)=>teamScores[a]>teamScores[b]?a:b);
+      const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==topIdx).map(i=>teamScores[i]));
+      if(topScore-maxOther>=3){winTriggeredBy=topIdx;showWinner();return;}
+    }
+  }
+
   viewStats('roundend');
 }
 
 async function nextTurn(){
-  teamsPlayedThisRound++;
   const roundComplete=teamsPlayedThisRound>=activeTeamIndices.length;
 
   if(roundComplete){
     roundNumber++;
     teamsPlayedThisRound=0;
-    roundSongHistory=[]; // reset for new round
+    roundSongHistory=[];
 
-    // Solo play: end game if winning score reached
-    if(teamNames.length===1){
-      if(teamScores[0]>=winPts){showWinner();return;}
-    } else if(winTriggeredBy!==-1){
-      // Someone hit winPts — check if they lead by 3+
+    // Check eliminations if win was triggered
+    if(winTriggeredBy!==-1){
       const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
-      const topIdx=teamScores.indexOf(topScore);
-      const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==topIdx).map(i=>teamScores[i]));
-
-      if(topScore-maxOther>=3){
-        winTriggeredBy=topIdx; // ensure winner is current leader
-        showWinner();return;
-      }
-
-      // Check eliminations — teams more than 3 behind leader
       const toElim=activeTeamIndices.filter(i=>topScore-teamScores[i]>3);
       if(toElim.length>0&&toElim.length<activeTeamIndices.length){
         activeTeamIndices=activeTeamIndices.filter(i=>!toElim.includes(i));
@@ -934,8 +938,6 @@ async function nextTurn(){
         winTriggeredBy=-1;
         return;
       }
-      // Lead not enough yet — keep playing, but don't reset winTriggeredBy
-      // so we keep checking each round
     }
   }
 
