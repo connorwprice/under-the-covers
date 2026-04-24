@@ -1045,7 +1045,97 @@ function renderStats(){
   }
 }
 
-// ── ADMIN ──
+// ── CHECKBOX TOGGLE ──
+function toggle(cat){
+  chks[cat]=!chks[cat];
+  const el=$('chk-'+cat);
+  if(el)el.className='chk'+(chks[cat]?' on':'');
+}
+
+// ── SETUP HELPERS ──
+function changeTeamCount(delta){
+  teamCount=Math.min(8,Math.max(1,teamCount+delta));
+  $('team-count-display').textContent=teamCount;
+  renderTeamInputs();
+}
+
+function renderTeamInputs(){
+  const container=$('team-names-container');
+  if(!container)return;
+  const defaults=['Team A','Team B','Team C','Team D','Team E','Team F','Team G','Team H'];
+  let html='';
+  for(let i=0;i<teamCount;i++){
+    const prev=document.getElementById('team-name-'+i);
+    const val=prev?prev.value:(defaults[i]||'Team '+(i+1));
+    html+='<input class="team-name-input" id="team-name-'+i+'" type="text" placeholder="'+(defaults[i]||'Team '+(i+1))+'" value="'+val+'" maxlength="20">';
+  }
+  container.innerHTML=html;
+}
+
+function adjustNum(id,delta){
+  const el=$(id);
+  const disp=$(id+'-display');
+  const min=id==='win-pts'?5:15;
+  const max=id==='win-pts'?200:300;
+  const val=Math.min(max,Math.max(min,(parseInt(el.value)||0)+delta));
+  el.value=val;
+  if(disp)disp.textContent=val;
+}
+
+// ── PAUSE / RESUME ──
+function togglePause(){
+  paused=!paused;
+  const btn=$('pause-btn');
+  if(paused){
+    clearInterval(timer);timer=null;
+    pauseSpotify();
+    if(btn){btn.textContent='▶ Resume';btn.classList.add('paused');}
+  } else {
+    resumeGame();
+  }
+}
+
+function resumeGame(){
+  paused=false;
+  timer=setInterval(()=>{
+    timeLeft--;drawTimer();
+    if(timeLeft<=0){stopTimer();pauseSpotify();showGracePeriod();}
+  },1000);
+  fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
+    method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
+  }).catch(()=>{});
+  const btn=$('pause-btn');
+  if(btn){btn.textContent='⏸ Pause';btn.classList.remove('paused');}
+}
+
+function confirmStop(){
+  if(confirm('Stop the current game?')){
+    stopTimer();pauseSpotify();gameOver=true;showScreen('login');
+  }
+}
+
+function goHome(){showScreen('login');}
+
+// ── ELIMINATION ──
+function showEliminationScreen(eliminatedIndices){
+  $('elim-message').textContent='The lead is too great - some teams have been eliminated!';
+  $('elim-eliminated').style.display='block';
+  $('elim-eliminated-names').textContent=eliminatedIndices.map(i=>teamNames[i]+' ('+teamScores[i]+' pts)').join(', ');
+  $('elim-remaining-names').innerHTML=activeTeamIndices.map(i=>
+    '<span style="display:block">'+teamNames[i]+': <strong style="color:var(--gold)">'+teamScores[i]+' pts</strong></span>'
+  ).join('');
+  $('elim-round-num').textContent=roundNumber;
+  showScreen('elimination');
+}
+
+async function continueAfterElimination(){
+  currentTeamIdx=activeTeamIndices[0];
+  showScreen('game');
+  await beginRound();
+}
+
+// ── GOOGLE SHEETS SYNC ──
+
 function showAdminLogin(){
   // If already logged into Spotify, go straight to admin login
   // If not, remind them to connect first
