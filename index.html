@@ -473,59 +473,69 @@ class SpotifyProvider {
 
   async init(token) {
     this._token = token;
+    console.log('[UTC] SpotifyProvider.init() called');
 
-    // Tear down any existing player cleanly before re-initialising
     if (this._player) {
       try { this._player.disconnect(); } catch(e) {}
       this._player = null;
       this._deviceId = null;
     }
 
-    // Wait for the SDK script to signal it is ready
+    console.log('[UTC] Waiting for Spotify SDK ready...');
     await spotifySDKReady;
+    console.log('[UTC] SDK ready. Creating Spotify.Player...');
 
     return new Promise((resolve, reject) => {
       const player = new Spotify.Player({
         name: 'Under the Covers',
-        getOAuthToken: cb => cb(this._token),
+        getOAuthToken: cb => {
+          console.log('[UTC] getOAuthToken called, token length:', this._token?.length);
+          cb(this._token);
+        },
         volume: 0.8
       });
 
       player.addListener('ready', async ({ device_id }) => {
         this._deviceId = device_id;
+        console.log('[UTC] Player READY. device_id:', device_id);
         setStatus('🎵 Connecting player...');
-        // Give Spotify's backend ~750ms to register the browser device
-        // before the first play command is issued via the REST API
         await new Promise(res => setTimeout(res, 750));
         setStatus('🎵 Ready to play');
+        console.log('[UTC] Init resolved');
         resolve();
       });
 
-      player.addListener('not_ready', () => {
+      player.addListener('not_ready', ({ device_id }) => {
+        console.warn('[UTC] Player NOT_READY. device_id:', device_id);
         this._deviceId = null;
         setStatus('⚠️ Player went offline');
       });
 
       player.addListener('initialization_error', ({ message }) => {
+        console.error('[UTC] initialization_error:', message);
         setStatus('Player error: ' + message);
         reject(new Error(message));
       });
 
       player.addListener('authentication_error', ({ message }) => {
+        console.error('[UTC] authentication_error:', message);
         setStatus('Auth error — please reconnect Spotify');
         reject(new Error(message));
       });
 
       player.addListener('account_error', ({ message }) => {
+        console.error('[UTC] account_error:', message);
         setStatus('⚠️ Spotify Premium required for playback');
         reject(new Error(message));
       });
 
       player.addListener('playback_error', ({ message }) => {
+        console.error('[UTC] playback_error:', message);
         setStatus('Playback error: ' + message);
       });
 
       player.connect().then(success => {
+        console.log('[UTC] player.connect() resolved:', success);
         if (!success) reject(new Error('Player failed to connect'));
       });
 
@@ -534,19 +544,32 @@ class SpotifyProvider {
   }
 
   async play(uri) {
-    if (!this._deviceId) { setStatus('⚠️ Player not ready'); return; }
+    console.log('[UTC] play() called | uri:', uri, '| deviceId:', this._deviceId, '| tokenLen:', this._token?.length);
+    if (!this._deviceId) {
+      setStatus('⚠️ Player not ready');
+      console.error('[UTC] play() aborted — no deviceId');
+      return;
+    }
     try {
-      const r = await fetch(
-        'https://api.spotify.com/v1/me/player/play?device_id=' + this._deviceId,
-        {
-          method: 'PUT',
-          headers: { Authorization: 'Bearer ' + this._token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uris: [uri] })
-        }
-      );
+      const url = 'https://api.spotify.com/v1/me/player/play?device_id=' + this._deviceId;
+      const r = await fetch(url, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + this._token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uris: [uri] })
+      });
+      console.log('[UTC] play API status:', r.status);
       if (r.status === 403) setStatus('⚠️ Spotify Premium required');
-      else setStatus('');
-    } catch(e) { setStatus('Playback error: ' + e.message); }
+      else if (r.status !== 204) {
+        const body = await r.text();
+        console.error('[UTC] Unexpected play response:', r.status, body);
+        setStatus('Playback error HTTP ' + r.status);
+      } else {
+        setStatus('');
+      }
+    } catch(e) {
+      console.error('[UTC] play() fetch threw:', e);
+      setStatus('Playback error: ' + e.message);
+    }
   }
 
   async pause() {
