@@ -512,12 +512,10 @@ class SpotifyProvider {
         reject(new Error(message));
       });
 
-      player.addListener('authentication_error', ({ message }) => {
+      player.addListener('authentication_error', () => {
         // Non-fatal in Development Mode — Spotify's internal web-playback scope
-        // check returns 403 even when everything is correctly configured.
-        // The player still reaches 'ready' with a valid device_id, so we log
-        // the warning but do NOT reject — the game can continue.
-        console.warn('[UTC] authentication_error (non-fatal in Dev Mode):', message);
+        // check returns 403 even when correctly configured. Player still reaches
+        // 'ready' with a valid device_id so we swallow this and continue.
         setStatus('');
       });
 
