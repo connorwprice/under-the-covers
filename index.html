@@ -596,10 +596,9 @@ async function startGame(){
   currentSong=null;
   prevSongData=null;
 
-  $('hdr-target').textContent=winPts;
-  renderScoreHeader();
-  showScreen('game');
-  setStatus('Loading songs...');
+  // Show a loading state on setup page while we prepare
+  const startBtn=document.querySelector('.start-btn');
+  if(startBtn){startBtn.textContent='Loading...';startBtn.disabled=true;}
 
   try{
     const sheetSongs=await fetchSheet();
@@ -619,8 +618,14 @@ async function startGame(){
 
   shuffle(tracks);
   idx=0;
-  setStatus('');
   await initPlayer();
+
+  // Everything ready — now switch to game screen
+  $('hdr-target').textContent=winPts;
+  renderScoreHeader();
+  showScreen('game');
+
+  if(startBtn){startBtn.textContent='Start Game ►';startBtn.disabled=false;}
   await beginRound();
 }
 
