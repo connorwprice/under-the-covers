@@ -543,17 +543,62 @@ async function initPlayer(){
 async function playTrack(uri){
   if(!uri)return;
   try{
-    const body={uris:[uri]};
-    const target=deviceId?`?device_id=${deviceId}`:'';
-    const r=await fetch(`https://api.spotify.com/v1/me/player/play${target}`,{
+    // If no device, try to find one first
+    if(!deviceId)await initPlayer();
+    if(!deviceId){pauseForDevice(uri);return;}
+
+    const r=await fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
       method:'PUT',
       headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-      body:JSON.stringify(body)
+      body:JSON.stringify({uris:[uri]})
     });
-    if(r.status===403){setStatus('⚠️ Spotify Premium required for playback')}
-    else if(r.status===404){setStatus('⚠️ No active Spotify device. Open Spotify first.');deviceId=null;}
-    else{setStatus('')}
+    if(r.status===403){
+      setStatus('⚠️ Spotify Premium required');
+    } else if(r.status===404){
+      // Device went away — try once more
+      deviceId=null;
+      await initPlayer();
+      if(deviceId){
+        await fetch('https://api.spotify.com/v1/me/player/play?device_id='+deviceId,{
+          method:'PUT',
+          headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+          body:JSON.stringify({uris:[uri]})
+        });
+        setStatus('');
+      } else {
+        pauseForDevice(uri);
+      }
+    } else {
+      setStatus('');
+    }
   }catch(e){setStatus('Playback error: '+e.message)}
+}
+
+function pauseForDevice(uri){
+  // Stop the timer so it doesn't run while waiting for Spotify
+  clearInterval(timer);timer=null;
+  setStatus('⚠️ Open Spotify on a device then tap Retry ↓');
+  const el=$('playback-status');
+  if(!el)return;
+  const btn=document.createElement('button');
+  btn.textContent='↺ Retry';
+  btn.style.cssText='margin-left:8px;background:var(--gold);border:none;border-radius:6px;padding:4px 10px;color:var(--vinyl);font-size:.75rem;cursor:pointer;font-family:DM Sans,sans-serif';
+  btn.onclick=async()=>{
+    btn.remove();
+    setStatus('Retrying...');
+    await initPlayer();
+    if(deviceId){
+      // Restart timer and play
+      timer=setInterval(()=>{
+        timeLeft--;drawTimer();
+        if(timeLeft<=0){stopTimer();pauseSpotify();showGracePeriod();}
+      },1000);
+      playTrack(uri);
+    } else {
+      pauseForDevice(uri);
+    }
+  };
+  el.appendChild(btn);
 }
 
 async function pauseSpotify(){
