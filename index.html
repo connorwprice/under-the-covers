@@ -441,7 +441,8 @@ let roundPts=0;
 
 // ── SONG STATE ──
 let currentSong=null;    // {t,c,o,uri} currently displayed
-let prevSongData=null;   // single prev slot: {t,c,o,uri,savedChecks}
+let prevSongData=null;   // song before current (with saved checkboxes)
+let nextSongData=null;   // queued next song when Prev was pressed (with saved checkboxes)
 let playedUris=new Set(); // URIs heard this game (never replayed)
 let songHistory=[];      // all songs heard: {title,cover,original,uri,team,pts}
 let roundSongHistory=[]; // scored songs since last full-round reset
@@ -649,6 +650,7 @@ async function beginRound(){
   chks={title:false,cover:false,original:false};
   currentSong=null;
   prevSongData=null;
+  nextSongData=null;
 
   // Update turn bar
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
@@ -707,25 +709,27 @@ function loadSong(){
   displaySong(song);
 }
 
-function displaySong(song){
+function displaySong(song,savedChecks){
   const title=song.t||'';
   const cover=song.c||'';
   const original=song.o||'';
   const uri=song.uri||null;
 
-  // Save current song to prev slot before switching
-  if(currentSong!==null){
-    prevSongData={...currentSong,savedChecks:{...chks}};
-  }
   currentSong={t:title,c:cover,o:original,uri};
 
-  // Enable prev button if we have a prev song
+  // Restore saved checkboxes or reset to zero
+  if(savedChecks){
+    chks={...savedChecks};
+  } else {
+    chks={title:false,cover:false,original:false};
+  }
+  ['title','cover','original'].forEach(k=>{
+    const el=$('chk-'+k);if(el)el.className='chk'+(chks[k]?' on':'');
+  });
+
+  // Prev button enabled only if prevSongData exists and we haven't already gone back
   const pb=$('prev-btn');
   if(pb)pb.disabled=prevSongData===null;
-
-  // Reset checkboxes
-  chks={title:false,cover:false,original:false};
-  ['title','cover','original'].forEach(k=>{const el=$('chk-'+k);if(el)el.className='chk';});
 
   // Clear display, reveal after short delay
   $('s-name').textContent='Loading...';
@@ -751,17 +755,31 @@ function displaySong(song){
 async function nextSong(){
   if(!active&&!paused)return;
   const scoredSong=currentSong?{...currentSong}:null;
+  const scoredChecks={...chks};
+
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
   if(paused)resumeGame();
 
   if(!scoredSong){loadSong();return;}
 
-  const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
+  // Score the current song
+  const t=scoredChecks.title?1:0,cv=scoredChecks.cover?1:0,o=scoredChecks.original?1:0;
   const pts=t+cv+o;
-
   recordSong(scoredSong,pts,t,cv,o);
-  loadSong();
+
+  if(nextSongData){
+    // We had gone back — return to the queued next song
+    const queued=nextSongData;
+    nextSongData=null;
+    prevSongData={...scoredSong,savedChecks:scoredChecks};
+    displaySong(queued,queued.savedChecks);
+  } else {
+    // Normal forward — save current as prev, load new song
+    prevSongData={...scoredSong,savedChecks:scoredChecks};
+    nextSongData=null;
+    loadSong();
+  }
 }
 
 async function prevSong(){
@@ -769,25 +787,17 @@ async function prevSong(){
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
 
+  // Save current song as queued next (with current checkbox state)
+  nextSongData={...currentSong,savedChecks:{...chks}};
+
+  // Restore previous song
   const prev=prevSongData;
   prevSongData=null;
 
-  // Restore previous song WITHOUT saving to prev slot again
-  currentSong={t:prev.t,c:prev.c,o:prev.o,uri:prev.uri};
-  chks={...prev.savedChecks};
-  ['title','cover','original'].forEach(k=>{
-    const el=$('chk-'+k);if(el)el.className='chk'+(chks[k]?' on':'');
-  });
+  displaySong(prev,prev.savedChecks);
 
-  $('s-name').textContent=prev.t;
-  $('s-by').textContent='by '+prev.c;
-  $('ans-title').textContent=prev.t;
-  $('ans-cover').textContent=prev.c;
-  $('ans-original').textContent=prev.o;
-
-  const pb=$('prev-btn');if(pb)pb.disabled=true; // only 1 back allowed
-
-  if(prev.uri&&active)playTrack(prev.uri);
+  // Gray out prev button — can't go back further
+  const pb=$('prev-btn');if(pb)pb.disabled=true;
 }
 
 function recordSong(song,pts,t,cv,o){
@@ -969,6 +979,7 @@ async function playAgain(){
   roundSongHistory=[];
   currentSong=null;
   prevSongData=null;
+  nextSongData=null;
   shuffle(tracks);idx=0;
   renderScoreHeader();
   showScreen('game');
