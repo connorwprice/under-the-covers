@@ -446,6 +446,8 @@ let nextSongData=null;   // queued next song when Prev was pressed (with saved c
 let playedUris=new Set(); // URIs heard this game (never replayed)
 let songHistory=[];      // all songs heard: {title,cover,original,uri,team,pts}
 let roundSongHistory=[]; // scored songs since last full-round reset
+let recycleQueue=[];     // songs scored 0 — queued for the other team next turn
+let recycledByTeam={};   // uri -> set of teamIdx that have already tried this recycled song
 
 // ── SPOTIFY ──
 let deviceId=null;
@@ -641,6 +643,8 @@ async function startGame(){
   roundSongHistory=[];
   currentSong=null;
   prevSongData=null;
+  recycleQueue=[];
+  recycledByTeam={};
 
   // Show a loading state on setup page while we prepare
   const startBtn=document.querySelector('.start-btn');
@@ -741,6 +745,26 @@ function songAlreadyPlayed(uri,title){
 }
 
 function loadSong(){
+  // Check recycle queue first — songs the other team scored 0 on
+  while(recycleQueue.length>0){
+    const candidate=recycleQueue[0];
+    const alreadyTriedByThisTeam=(recycledByTeam[candidate.uri]||new Set()).has(currentTeamIdx);
+    if(alreadyTriedByThisTeam){
+      // This team already tried it — discard and check next
+      recycleQueue.shift();
+      continue;
+    }
+    // Good — this team hasn't tried it yet
+    recycleQueue.shift();
+    // Mark this team as having tried it
+    if(!recycledByTeam[candidate.uri])recycledByTeam[candidate.uri]=new Set();
+    recycledByTeam[candidate.uri].add(currentTeamIdx);
+    // Ensure it stays in playedUris (it was already there) so normal tracks don't re-serve it
+    playedUris.add(candidate.uri);
+    displaySong(candidate);
+    return;
+  }
+
   // Advance past played songs
   while(idx<tracks.length && songAlreadyPlayed(tracks[idx].uri,tracks[idx].t)){idx++;}
   if(idx>=tracks.length){endRound();return;}
@@ -812,6 +836,16 @@ async function nextSong(){
   const t=scoredChecks.title?1:0,cv=scoredChecks.cover?1:0,o=scoredChecks.original?1:0;
   const pts=t+cv+o;
   recordSong(scoredSong,pts,t,cv,o);
+
+  // If scored 0, queue this song for the other team next turn
+  if(pts===0&&scoredSong.uri){
+    const alreadyQueued=recycleQueue.some(s=>s.uri===scoredSong.uri);
+    if(!alreadyQueued){
+      recycleQueue.push({...scoredSong});
+      if(!recycledByTeam[scoredSong.uri])recycledByTeam[scoredSong.uri]=new Set();
+      recycledByTeam[scoredSong.uri].add(currentTeamIdx);
+    }
+  }
 
   if(nextSongData){
     // We had gone back — return to the queued next song
@@ -954,6 +988,15 @@ function endRound(){
     const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
     const pts=t+cv+o;
     recordSong(currentSong,pts,t,cv,o);
+    // If scored 0, queue this song for the other team next turn
+    if(pts===0&&currentSong.uri){
+      const alreadyQueued=recycleQueue.some(s=>s.uri===currentSong.uri);
+      if(!alreadyQueued){
+        recycleQueue.push({...currentSong});
+        if(!recycledByTeam[currentSong.uri])recycledByTeam[currentSong.uri]=new Set();
+        recycledByTeam[currentSong.uri].add(currentTeamIdx);
+      }
+    }
   }
 
   // Increment now so we can check if round is complete
@@ -1027,6 +1070,8 @@ async function playAgain(){
   currentSong=null;
   prevSongData=null;
   nextSongData=null;
+  recycleQueue=[];
+  recycledByTeam={};
   shuffle(tracks);idx=0;
   renderScoreHeader();
   showScreen('game');
