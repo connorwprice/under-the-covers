@@ -1311,6 +1311,49 @@ async function confirmRemoveSong(rowIdx, uri, title){
   }catch(e){alert('Error removing: '+e.message)}
 }
 
+// ── SHEET FUNCTIONS ──
+
+function jsonpFetch(url){
+  return new Promise((resolve,reject)=>{
+    const cbName='utc_cb_'+Date.now();
+    const script=document.createElement('script');
+    const timeout=setTimeout(()=>{
+      delete window[cbName];
+      document.head.removeChild(script);
+      reject(new Error('Request timed out'));
+    },10000);
+    window[cbName]=function(data){
+      clearTimeout(timeout);
+      delete window[cbName];
+      document.head.removeChild(script);
+      resolve(data);
+    };
+    script.src=url+(url.includes('?')?'&':'?')+'callback='+cbName;
+    script.onerror=()=>{clearTimeout(timeout);delete window[cbName];reject(new Error('Script load failed'));};
+    document.head.appendChild(script);
+  });
+}
+
+async function fetchSheet(){
+  const d=await jsonpFetch(APPS_SCRIPT_URL+'?t='+Date.now());
+  if(d.error)throw new Error(d.error);
+  return d.rows||[];
+}
+
+async function writeToSheet(rowData){
+  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'append',data:JSON.stringify(rowData)}).toString();
+  await fetch(url,{method:'GET',redirect:'follow'});
+  await new Promise(res=>setTimeout(res,2000));
+}
+
+async function updateSheetRow(rowIndex,values){
+  const padded=[...values];
+  while(padded.length<5)padded.push('');
+  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'update',rowIndex,data:JSON.stringify(padded)}).toString();
+  await fetch(url,{method:'GET',redirect:'follow'});
+  await new Promise(res=>setTimeout(res,2000));
+}
+
 // ── INIT ──
 (async()=>{
   const p=new URLSearchParams(location.search);
