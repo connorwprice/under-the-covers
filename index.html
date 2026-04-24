@@ -959,7 +959,7 @@ function showGracePeriod(){
   const bar=$('turn-bar');
   bar.style.background='#c0392b';bar.style.color='#fff';
 
-  let graceLeft=5;
+  let graceLeft=10;
   function tick(){
     if(graceLeft<=0){
       clearInterval(graceTimer);graceTimer=null;
