@@ -1103,7 +1103,7 @@ function renderStats(){
     const pos=activeTeamIndices.indexOf(currentTeamIdx);
     const nextI=activeTeamIndices[(pos+1)%activeTeamIndices.length];
     const isRoundEnd=(teamsPlayedThisRound)>=activeTeamIndices.length;
-    const label=isRoundEnd?'Start Round '+roundNumber+' ►':teamNames[nextI]+"'s Turn ►";
+    const label=isRoundEnd?'Start Round '+(roundNumber+1)+' ►':teamNames[nextI]+"'s Turn ►";
     footer.innerHTML=
       '<button class="continue-btn" onclick="nextTurn()">'+label+'</button>'+
       '<button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px;margin-top:.5rem" onclick="confirmStop()">■ End Game</button>';
