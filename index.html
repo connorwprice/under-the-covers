@@ -899,6 +899,17 @@ function endRound(){
     recordSong(currentSong,pts,t,cv,o);
   }
 
+  // Check if this completes a full round and a winner exists
+  const isLastTeam=(teamsPlayedThisRound+1)>=activeTeamIndices.length;
+  if(isLastTeam&&winTriggeredBy!==-1){
+    const winScore=teamScores[winTriggeredBy];
+    const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==winTriggeredBy).map(i=>teamScores[i]));
+    if(winScore-maxOther>=3){showWinner();return;}
+  }
+  if(isLastTeam&&teamNames.length===1&&teamScores[0]>=winPts){
+    showWinner();return;
+  }
+
   viewStats('roundend');
 }
 
