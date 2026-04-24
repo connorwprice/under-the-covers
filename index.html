@@ -418,34 +418,37 @@ const REDIRECT_URI = window.location.origin + window.location.pathname;
 // ── STATE ──
 let token=null,playlists=[],selectedPl=null;
 let tracks=[],idx=0;
+
 // ── TEAM STATE ──
 let teamCount=2;
-let teamNames=[];   // ['Team A','Team B',...]
-let teamScores=[];  // [0,0,...]
-let teamStats=[];   // [{titles,covers,originals,skips,songs,points,rounds},...]
+let teamNames=[];        // ['Team A','Team B',...]
+let teamScores=[];       // [0,0,...]
 let currentTeamIdx=0;
-let roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
-let playedUris=new Set();
-let carryOverSong=null;
-let carryOverQueue=[];
-let pendingCarryOverQueue=[]; // queue of 0-pt songs for next team's turn
-let songHistory=[];
-let roundSongHistory=[];
-let prevSongData=null;
-let nextSongSlot=null;
-let isNavigating=false;
-let currentSongChecks=null;
-// Win condition state
-let winTriggeredBy=-1;
+let activeTeamIndices=[];
+let winPts=25,roundSecs=60,timeLeft=60;
+let timer=null,graceTimer=null;
 let roundNumber=1;
 let teamsPlayedThisRound=0;
-let activeTeamIndices=[];  // indices of teams still in the game
+let winTriggeredBy=-1;
 let gameOver=false;
-let winPts=25,roundSecs=60,timeLeft=60;
-let timer=null,roundPts=0;
+let winnerName='';
+
+// ── ROUND STATE ──
+let active=false;
+let paused=false;
 let chks={title:false,cover:false,original:false};
+let roundPts=0;
+
+// ── SONG STATE ──
+let currentSong=null;    // {t,c,o,uri} currently displayed
+let prevSongData=null;   // single prev slot: {t,c,o,uri,savedChecks}
+let playedUris=new Set(); // URIs heard this game (never replayed)
+let songHistory=[];      // all songs heard: {title,cover,original,uri,team,pts}
+let roundSongHistory=[]; // scored songs since last full-round reset
+
+// ── SPOTIFY ──
 let deviceId=null;
-let usingSpotify=true,active=false;
+let usingSpotify=true;
 
 const $=id=>document.getElementById(id);
 function showScreen(id){
@@ -565,51 +568,59 @@ async function pauseSpotify(){
 function setStatus(m){$('playback-status').textContent=m}
 
 // ── GAME ──
+
 async function startGame(){
-  // Collect team names from dynamic inputs
+  // Collect team names
   teamNames=[];
   for(let i=0;i<teamCount;i++){
     const inp=document.getElementById('team-name-'+i);
-    teamNames.push(inp?inp.value.trim()||'Team '+(i+1):'Team '+(i+1));
+    teamNames.push(inp&&inp.value.trim()?inp.value.trim():'Team '+(i+1));
   }
   winPts=parseInt($('win-pts').value)||25;
   roundSecs=parseInt($('round-secs').value)||60;
 
-  // Init scores and stats
+  // Init scores and round tracking
   teamScores=teamNames.map(()=>0);
-  teamStats=teamNames.map(()=>({titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0}));
-  currentTeamIdx=0;winTriggeredBy=-1;roundNumber=1;teamsPlayedThisRound=0;
-  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
-  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
-  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
+  activeTeamIndices=teamNames.map((_,i)=>i);
+  currentTeamIdx=0;
+  roundNumber=1;
+  teamsPlayedThisRound=0;
+  winTriggeredBy=-1;
+  gameOver=false;
+  winnerName='';
+
+  // Init song state
   playedUris=new Set();
+  songHistory=[];
+  roundSongHistory=[];
+  currentSong=null;
+  prevSongData=null;
 
   $('hdr-target').textContent=winPts;
   renderScoreHeader();
   showScreen('game');
-  setStatus('Finding Spotify device...');
-
-  // Load from Google Sheet — fall back to TRACKS only if sheet fails
   setStatus('Loading songs...');
+
   try{
     const sheetSongs=await fetchSheet();
     if(sheetSongs&&sheetSongs.length>0){
-      tracks=sheetSongs.filter(s=>s.status==='approved'&&s.uri&&s.original)
-        .map(s=>({t:s.title,c:s.cover,o:s.original,uri:s.uri}));
-      setStatus('Loaded '+tracks.length+' songs.');
+      const seen=new Set();
+      tracks=sheetSongs
+        .filter(s=>s.status==='approved'&&s.uri&&s.original)
+        .map(s=>({t:s.title,c:s.cover,o:s.original,uri:s.uri}))
+        .filter(s=>{if(seen.has(s.uri))return false;seen.add(s.uri);return true;});
     } else {
       throw new Error('Empty sheet');
     }
   }catch(e){
-    console.warn('Sheet load failed, using built-in:',e.message);
+    console.warn('Sheet load failed:',e.message);
     tracks=[];
-    setStatus('Using built-in song list.');
   }
 
-  await initPlayer();
-
-  shuffle(tracks);idx=0;
+  shuffle(tracks);
+  idx=0;
   setStatus('');
+  await initPlayer();
   await beginRound();
 }
 
@@ -617,124 +628,107 @@ function renderScoreHeader(){
   const wrap=$('score-wrap');
   if(!wrap)return;
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
-  let html='';
-  teamNames.forEach((name,i)=>{
-    if(i>0)html+=`<div class="vs-lbl">·</div>`;
-    html+=`<div class="score-chip">
-      <div class="sc-lbl">${name}</div>
-      <div class="sc-num" style="color:${colors[i%colors.length]}" id="pts-${i}">${teamScores[i]}</div>
-    </div>`;
-  });
-  wrap.innerHTML=html;
+  wrap.innerHTML=teamNames.map((name,i)=>
+    (i>0?'<div class="vs-lbl">·</div>':'')+
+    '<div class="score-chip">'+
+    '<div class="sc-lbl">'+name+'</div>'+
+    '<div class="sc-num" style="color:'+colors[i%colors.length]+'" id="pts-'+i+'">'+teamScores[i]+'</div>'+
+    '</div>'
+  ).join('');
 }
 
 async function beginRound(){
-  roundPts=0;active=true;
-  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
-  // Reset per-round tracking
-  roundSongHistory=[];
-  prevSongData=null;nextSongSlot=null;isNavigating=false;
-  currentSongChecks=null;
+  active=true;
+  paused=false;
+  roundPts=0;
+  chks={title:false,cover:false,original:false};
   currentSong=null;
-  const pb=$('prev-btn');if(pb)pb.disabled=true;
+  prevSongData=null;
 
-  // Rebuild playedUris from full game history so no song ever replays
-  songHistory.forEach(s=>{
-    if(s.uri)playedUris.add(s.uri);
-    if(s.title)playedUris.add(s.title);
-  });
-  // Also mark carry-over songs (heard but unscored) as played
-  pendingCarryOverQueue.forEach(s=>{
-    if(s.uri)playedUris.add(s.uri);
-    if(s.t)playedUris.add(s.t);
-  });
-  // Pre-clear song card so nothing stale shows at round start
+  // Update turn bar
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
+  const bar=$('turn-bar');
+  const pos=activeTeamIndices.indexOf(currentTeamIdx);
+  if(teamNames.length===1){
+    bar.textContent=teamNames[currentTeamIdx]+"'s Turn";
+  } else {
+    const scorekeeperIdx=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+    bar.textContent=teamNames[currentTeamIdx]+"'s Turn — Scorekeeper: "+teamNames[scorekeeperIdx];
+  }
+  bar.style.background='';bar.style.color='';
+
+  // Update score display
+  teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i];});
+
+  // Clear song card
   $('s-name').textContent='Loading...';
   $('s-by').textContent='';
   $('s-art-wrap').textContent='🎵';
   $('ans-title').textContent='—';
   $('ans-cover').textContent='—';
   $('ans-original').textContent='—';
-  ['title','cover','original'].forEach(k=>{const el=$('chk-'+k);if(el)el.className='chk'});
-  // Reset next-turn button visibility
-  const btn=$('next-turn-btn');if(btn)btn.style.display='';
-  if(usingSpotify) await initPlayer();
-  const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
-  const bar=$('turn-bar');
-  if(teamNames.length===1){
-    bar.textContent=`${teamNames[currentTeamIdx]}'s Turn`;
-  } else {
-    const scorekeeperPos=(currentPos+1)%activeTeamIndices.length;
-    const scorekeeperIdx=activeTeamIndices[scorekeeperPos];
-    bar.textContent=`${teamNames[currentTeamIdx]}'s Turn — Scorekeeper: ${teamNames[scorekeeperIdx]}`;
-  }
-  bar.className='turn-bar'+(currentTeamIdx%2===0?'':' b');
-  teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i]});
-  // Move pending carry-over queue into active carry-over queue for this round
-  carryOverQueue=[...pendingCarryOverQueue];
-  pendingCarryOverQueue=[];
-  carryOverSong=null;
-  loadSong();startTimer();
+  ['title','cover','original'].forEach(k=>{const el=$('chk-'+k);if(el)el.className='chk';});
+
+  // Reset prev button
+  const pb=$('prev-btn');if(pb)pb.disabled=true;
+
+  if(usingSpotify)await initPlayer();
+  loadSong();
+  startTimer();
 }
 
+// ── SONG LOADING ──
 
-function songKey(s){return s.uri||s.t||s.title||''}
-function isPlayed(s){return playedUris.has(s.uri)||playedUris.has(s.t)||playedUris.has(s.title)||playedUris.has(songKey(s))}
+function songAlreadyPlayed(uri,title){
+  // Check playedUris Set (primary source)
+  if(uri&&playedUris.has(uri))return true;
+  // Double-check songHistory as safety net
+  if(uri&&songHistory.some(s=>s.uri===uri))return true;
+  if(title&&songHistory.some(s=>s.title===title))return true;
+  return false;
+}
 
-function loadSong(fromPrev){
-  // Play carry-over songs first (queue of unscored songs from prev team)
-  if(!fromPrev && prevSongData===null && carryOverQueue.length>0){
-    const song=carryOverQueue.shift();
-    // Mark as played so it doesn't repeat in normal queue
-    playedUris.add(song.uri||song.t||song.title||songKey(song));
-    displaySong(song, true);
-    return;
-  }
-  // Skip already-played songs
-  while(idx<tracks.length && isPlayed(tracks[idx])){idx++}
-  if(idx>=tracks.length){endRound();return}
+function loadSong(){
+  // Advance past played songs
+  while(idx<tracks.length && songAlreadyPlayed(tracks[idx].uri,tracks[idx].t)){idx++;}
+  if(idx>=tracks.length){endRound();return;}
+
   const song=tracks[idx];
-  playedUris.add(song.uri||song.t||song.title||songKey(song));
   idx++;
-  displaySong(song, false);
+
+  // Mark as played immediately
+  if(song.uri)playedUris.add(song.uri);
+
+  displaySong(song);
 }
 
-// Tracks the currently displayed song for prev/carry-over
-let currentSong=null;
-
-function displaySong(song, isCarryOver){
-  const title=song.t||song.name||'';
-  const cover=song.c||(song.artists?.map(a=>a.name).join(', '))||'';
+function displaySong(song){
+  const title=song.t||'';
+  const cover=song.c||'';
   const original=song.o||'';
   const uri=song.uri||null;
 
-  // When moving forward normally (not navigating), save current as prevSongData
-  if(!isNavigating && currentSong!==null){
-    prevSongData={
-      title:currentSong.title,cover:currentSong.cover,
-      original:currentSong.original,uri:currentSong.uri,
-      savedChecks:{...chks}
-    };
-    nextSongSlot=null; // clear forward slot when moving forward
+  // Save current song to prev slot before switching
+  if(currentSong!==null){
+    prevSongData={...currentSong,savedChecks:{...chks}};
   }
+  currentSong={t:title,c:cover,o:original,uri};
 
-  // Update current song reference
-  currentSong={title,cover,original,uri};
-  currentSongChecks={title:false,cover:false,original:false};
-
-  // Prev button enabled only if prevSongData exists AND not already navigated back
+  // Enable prev button if we have a prev song
   const pb=$('prev-btn');
-  if(pb)pb.disabled=prevSongData===null||isNavigating;
+  if(pb)pb.disabled=prevSongData===null;
 
-  // Clear display
+  // Reset checkboxes
+  chks={title:false,cover:false,original:false};
+  ['title','cover','original'].forEach(k=>{const el=$('chk-'+k);if(el)el.className='chk';});
+
+  // Clear display, reveal after short delay
   $('s-name').textContent='Loading...';
   $('s-by').textContent='';
   $('s-art-wrap').textContent='🎵';
   $('ans-title').textContent='—';
   $('ans-cover').textContent='—';
   $('ans-original').textContent='—';
-  chks={title:false,cover:false,original:false};
-  ['title','cover','original'].forEach(k=>$('chk-'+k).className='chk');
 
   if(uri&&active)playTrack(uri);
 
@@ -744,217 +738,115 @@ function displaySong(song, isCarryOver){
     $('ans-title').textContent=title;
     $('ans-cover').textContent=cover;
     $('ans-original').textContent=original;
-  }, 800);
+  },800);
 }
 
-function toggle(k){chks[k]=!chks[k];$('chk-'+k).className='chk'+(chks[k]?' on':'')}
+// ── SCORING ──
+
+async function nextSong(){
+  if(!active&&!paused)return;
+  const scoredSong=currentSong?{...currentSong}:null;
+  await pauseSpotify();
+  await new Promise(res=>setTimeout(res,300));
+  if(paused)resumeGame();
+
+  if(!scoredSong){loadSong();return;}
+
+  const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
+  const pts=t+cv+o;
+
+  recordSong(scoredSong,pts,t,cv,o);
+  loadSong();
+}
 
 async function prevSong(){
-  if(!prevSongData||isNavigating)return;
+  if(!prevSongData)return;
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
 
-  // Save current song as the "next" slot so we can return to it
-  nextSongSlot={
-    title:currentSong.title,cover:currentSong.cover,
-    original:currentSong.original,uri:currentSong.uri,
-    savedChecks:{...chks}
-  };
-
-  // Set navigating flag — prevents history tracking and disables prev
-  isNavigating=true;
-
   const prev=prevSongData;
+  prevSongData=null;
 
-  // Restore display WITHOUT triggering displaySong (to avoid side effects)
-  currentSong={title:prev.title,cover:prev.cover,original:prev.original,uri:prev.uri};
-  $('s-name').textContent=prev.title;
-  $('s-by').textContent='by '+prev.cover;
-  $('ans-title').textContent=prev.title;
-  $('ans-cover').textContent=prev.cover;
-  $('ans-original').textContent=prev.original;
+  // Restore previous song WITHOUT saving to prev slot again
+  currentSong={t:prev.t,c:prev.c,o:prev.o,uri:prev.uri};
   chks={...prev.savedChecks};
   ['title','cover','original'].forEach(k=>{
-    $('chk-'+k).className='chk'+(chks[k]?' on':'');
+    const el=$('chk-'+k);if(el)el.className='chk'+(chks[k]?' on':'');
   });
-  currentSongChecks={...prev.savedChecks};
 
-  // Gray out prev button — only 1 back allowed
-  const pb=$('prev-btn');
-  if(pb)pb.disabled=true;
+  $('s-name').textContent=prev.t;
+  $('s-by').textContent='by '+prev.c;
+  $('ans-title').textContent=prev.t;
+  $('ans-cover').textContent=prev.c;
+  $('ans-original').textContent=prev.o;
+
+  const pb=$('prev-btn');if(pb)pb.disabled=true; // only 1 back allowed
 
   if(prev.uri&&active)playTrack(prev.uri);
 }
 
-async function nextSong(){
-  // Capture the song being scored RIGHT NOW before anything changes
-  const scoredSong=currentSong?{...currentSong}:null;
-  // Ensure scored song stays in playedUris so it never replays for any team
-  if(scoredSong)playedUris.add(scoredSong.uri||scoredSong.title||songKey(scoredSong));
+function recordSong(song,pts,t,cv,o){
+  // Ensure played
+  if(song.uri)playedUris.add(song.uri);
 
-  await pauseSpotify();
-  await new Promise(res=>setTimeout(res,300));
-  if(paused)resumeFromPause();
-
-  // If we navigated back, return to the forward song first
-  if(isNavigating && nextSongSlot){
-    // Score the prev song (scoredSong already captured above)
-    const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
-    const pts=t+cv+o;
-    roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
-    roundStats.points+=pts;roundStats.songs++;
-    teamStats[currentTeamIdx].titles+=t;teamStats[currentTeamIdx].covers+=cv;
-    teamStats[currentTeamIdx].originals+=o;teamStats[currentTeamIdx].points+=pts;
-    teamStats[currentTeamIdx].songs++;
-    roundPts+=pts;teamScores[currentTeamIdx]+=pts;
-    const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
-    // Update existing history entry for this song
-    const existing=songHistory.find(s=>s.title===scoredSong?.title&&s.team===teamNames[currentTeamIdx]);
-    if(existing){
+  // Avoid duplicate entries for same song+team
+  const existing=songHistory.find(s=>s.uri===song.uri&&s.team===teamNames[currentTeamIdx]);
+  if(existing){
+    // Update if pts improved
+    if(pts>existing.pts){
       existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-      if(pts>0&&!roundSongHistory.some(s=>s===existing))roundSongHistory.push(existing);
+      // Update team score delta
+      const diff=pts-existing.pts;
+      if(diff>0){
+        teamScores[currentTeamIdx]+=diff;
+        roundPts+=diff;
+        const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
+      }
     }
-    if(pts===0&&scoredSong&&!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri)){
-      pendingCarryOverQueue.push({t:scoredSong.title,c:scoredSong.cover,o:scoredSong.original,uri:scoredSong.uri});
-    }
-    carryOverSong=null;
-    if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){winTriggeredBy=currentTeamIdx;roundsThisCycle=0;}
-    // Return to forward song
-    isNavigating=false;
-    const fwd=nextSongSlot;nextSongSlot=null;
-    // Restore forward song display
-    currentSong={title:fwd.title,cover:fwd.cover,original:fwd.original,uri:fwd.uri};
-    $('s-name').textContent=fwd.title;$('s-by').textContent='by '+fwd.cover;
-    $('ans-title').textContent=fwd.title;$('ans-cover').textContent=fwd.cover;$('ans-original').textContent=fwd.original;
-    chks={...fwd.savedChecks};
-    ['title','cover','original'].forEach(k=>$('chk-'+k).className='chk'+(chks[k]?' on':''));
-    const pb=$('prev-btn');if(pb)pb.disabled=prevSongData===null;
-    if(fwd.uri&&active)playTrack(fwd.uri);
     return;
   }
 
-  const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
-  const pts=t+cv+o;
-  roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
-  roundStats.points+=pts;roundStats.songs++;
-  teamStats[currentTeamIdx].titles+=t;teamStats[currentTeamIdx].covers+=cv;
-  teamStats[currentTeamIdx].originals+=o;teamStats[currentTeamIdx].points+=pts;
-  teamStats[currentTeamIdx].songs++;
-  roundPts+=pts;teamScores[currentTeamIdx]+=pts;
+  // New entry
+  const entry={
+    title:song.t||'',cover:song.c||'',original:song.o||'',
+    uri:song.uri||null,team:teamNames[currentTeamIdx],
+    pts,checks:{title:!!t,cover:!!cv,original:!!o}
+  };
+  songHistory.push(entry);
+  roundSongHistory.push(entry);
+
+  // Update scores
+  teamScores[currentTeamIdx]+=pts;
+  roundPts+=pts;
   const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
 
-  // Track song history using scoredSong (captured before anything changed)
-  const songTitle=scoredSong?.title||'';
-  const songCover=scoredSong?.cover||'';
-  const songOriginal=scoredSong?.original||'';
-  const songUri=scoredSong?.uri||null;
-
-  // Deduplicate — don't add same song twice (e.g. after prevSongData)
-  // Only track history for non-navigation moves
-  if(!isNavigating){
-    const alreadyInHistory=songHistory.some(s=>
-      s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
-    if(!alreadyInHistory){
-      const songEntry={title:songTitle,cover:songCover,original:songOriginal,
-        uri:songUri,team:teamNames[currentTeamIdx],pts,
-        checks:{title:!!t,cover:!!cv,original:!!o}};
-      songHistory.push(songEntry);
-      if(pts>0)roundSongHistory.push(songEntry); // scored only
-    } else if(pts>0){
-      const existing=songHistory.find(s=>s.title===songTitle&&s.team===teamNames[currentTeamIdx]);
-      if(existing){
-        existing.pts=pts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-        if(pts>0&&!roundSongHistory.some(s=>s===existing))roundSongHistory.push(existing);
-      }
-    }
-  }
-  // Clear navigation state after normal next
-  isNavigating=false;
-
-  // If 0 points scored, add to carry-over queue for next team
-  // Never clear the queue — accumulate all unscored songs from this round
-  if(pts===0 && scoredSong){
-    if(!pendingCarryOverQueue.some(s=>s.uri===scoredSong.uri)){
-      // Store in t/c/o format to match tracks array
-      pendingCarryOverQueue.push({t:scoredSong.title,c:scoredSong.cover,o:scoredSong.original,uri:scoredSong.uri});
-    }
-  }
-  carryOverSong=null;
-
   // Check win trigger
-  if(teamScores[currentTeamIdx]>=winPts && winTriggeredBy===-1){
-    winTriggeredBy=currentTeamIdx;roundsThisCycle=0;
+  if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){
+    winTriggeredBy=currentTeamIdx;
   }
-  loadSong();
 }
 
+// ── TIMER ──
+
 function startTimer(){
-  timeLeft=roundSecs;drawTimer();
+  timeLeft=roundSecs;
+  drawTimer();
   timer=setInterval(()=>{
     timeLeft--;
     drawTimer();
     if(timeLeft<=0){
       stopTimer();
-      // Mark currently displayed song as carry-over if not yet scored
-      const curTitle=$('ans-title').textContent;
-      const curCover=$('ans-cover').textContent;
-      const curOriginal=$('ans-original').textContent;
-      if(curTitle&&curTitle!=='—'&&curTitle!=='Loading...'){
-        const curSong=tracks.find(s=>(s.t||s.name)===curTitle);
-        const coSong={t:curTitle,c:curCover,o:curOriginal,uri:curSong?.uri||null};
-        if(!pendingCarryOverQueue.some(s=>s.uri===coSong.uri))pendingCarryOverQueue.push(coSong);
-        carryOverSong=null;
-      }
-      // 5-second grace period — show scoring table with countdown
+      pauseSpotify();
       showGracePeriod();
     }
   },1000);
 }
 
-let graceTimer=null;
-function showGracePeriod(){
-  // Clear any existing grace timer
-  if(graceTimer){clearInterval(graceTimer);graceTimer=null;}
-
-  active=false;
-  pauseSpotify();
-
-  // Disable action buttons — only checkboxes stay active
-  document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{
-    if(el)el.disabled=true;
-  });
-  const pbGrace=$('prev-btn');if(pbGrace)pbGrace.disabled=true;
-
-  const bar=$('turn-bar');
-  bar.style.background='#c0392b';bar.style.color='#fff';
-
-  let graceLeft=5;
-
-  function tick(){
-    if(graceLeft<=0){
-      if(graceTimer){clearInterval(graceTimer);graceTimer=null;}
-      bar.style.background='';bar.style.color='';
-      bar.textContent='';
-      // Re-enable buttons
-      document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{
-        if(el)el.disabled=false;
-      });
-      const pb=$('prev-btn');if(pb)pb.disabled=prevSongData===null||isNavigating;
-      endRound();
-      return;
-    }
-    $('t-num').textContent=graceLeft;
-    bar.textContent="Time's Up! Score now: "+graceLeft+"s";
-    graceLeft--;
-  }
-
-  tick(); // run immediately so we see 5 right away
-  graceTimer=setInterval(tick,1000);
-}
 function stopTimer(){
   clearInterval(timer);timer=null;
-  if(graceTimer){clearInterval(graceTimer);graceTimer=null;}
+  clearInterval(graceTimer);graceTimer=null;
 }
+
 function drawTimer(){
   $('t-num').textContent=timeLeft;
   const C=2*Math.PI*39;
@@ -962,220 +854,153 @@ function drawTimer(){
   $('r-fill').className='r-fill'+(timeLeft<=10?' urgent':'');
 }
 
-function endRound(){
-  stopTimer();active=false;pauseSpotify();
+function showGracePeriod(){
+  active=false;
+  // Disable action buttons, leave checkboxes active
+  document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{if(el)el.disabled=true;});
+  const pb=$('prev-btn');if(pb)pb.disabled=true;
 
-  // Score whatever checkboxes are checked at time of round end
-  // (covers both grace period scoring and normal end-of-round)
-  const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
-  const gracePts=t+cv+o;
-  if(gracePts>0&&currentSong){
-    // Only score if this song hasn't already been scored (nextSong not pressed)
-    const alreadyScored=songHistory.some(s=>
-      s.title===currentSong.title&&s.team===teamNames[currentTeamIdx]&&s.pts>0);
-    if(!alreadyScored){
-      roundStats.titles+=t;roundStats.covers+=cv;roundStats.originals+=o;
-      roundStats.points+=gracePts;roundStats.songs++;
-      teamStats[currentTeamIdx].titles+=t;teamStats[currentTeamIdx].covers+=cv;
-      teamStats[currentTeamIdx].originals+=o;teamStats[currentTeamIdx].points+=gracePts;
-      teamStats[currentTeamIdx].songs++;
-      roundPts+=gracePts;teamScores[currentTeamIdx]+=gracePts;
-      const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
-      const entry={title:currentSong.title,cover:currentSong.cover,original:currentSong.original,
-        uri:currentSong.uri,team:teamNames[currentTeamIdx],pts:gracePts,
-        checks:{title:!!t,cover:!!cv,original:!!o}};
-      // Keep scored song in playedUris
-      playedUris.add(currentSong.uri||currentSong.title||songKey(currentSong));
-      songHistory.push(entry);
-      if(gracePts>0)roundSongHistory.push(entry);
-      // Check win trigger
-      if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){
-        winTriggeredBy=currentTeamIdx;roundsThisCycle=0;
-      }
-    } else {
-      // Update existing entry if pts changed
-      const existing=songHistory.find(s=>s.title===currentSong.title&&s.team===teamNames[currentTeamIdx]);
-      if(existing&&gracePts>existing.pts){
-        const diff=gracePts-existing.pts;
-        existing.pts=gracePts;existing.checks={title:!!t,cover:!!cv,original:!!o};
-        roundPts+=diff;teamScores[currentTeamIdx]+=diff;
-        teamStats[currentTeamIdx].points+=diff;
-        const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
-      }
+  const bar=$('turn-bar');
+  bar.style.background='#c0392b';bar.style.color='#fff';
+
+  let graceLeft=5;
+  function tick(){
+    if(graceLeft<=0){
+      clearInterval(graceTimer);graceTimer=null;
+      bar.style.background='';bar.style.color='';
+      document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{if(el)el.disabled=false;});
+      endRound();
+      return;
     }
-  } else if(gracePts===0&&currentSong){
-    // Song at round end was unscored — carry it over
-    if(currentSong&&!pendingCarryOverQueue.some(s=>s.uri===currentSong.uri)){
-      pendingCarryOverQueue.push({t:currentSong.title,c:currentSong.cover,o:currentSong.original,uri:currentSong.uri});
-    }
+    $('t-num').textContent=graceLeft;
+    bar.textContent="Time's Up! Score now: "+graceLeft+"s";
+    graceLeft--;
+  }
+  tick();
+  graceTimer=setInterval(tick,1000);
+}
+
+// ── END OF TURN ──
+
+function endRound(){
+  stopTimer();
+  active=false;
+  pauseSpotify();
+
+  // Score whatever is currently checked (grace period scoring)
+  if(currentSong){
+    const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
+    const pts=t+cv+o;
+    recordSong(currentSong,pts,t,cv,o);
   }
 
-  teamStats[currentTeamIdx].rounds++;
-  $('re-title').textContent=`${teamNames[currentTeamIdx]}'s Round!`;
-  $('re-pts').textContent=roundPts;
-  // Round breakdown
-  const rs=roundStats;
-  const pct=(n,d)=>d>0?Math.round(n/d*100)+'%':'—';
-  $('re-summary').innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.75rem">
-      <div style="background:var(--vinyl);border-radius:8px;padding:.5rem .6rem;text-align:center">
-        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Titles</div>
-        <div style="font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--cream)">${rs.titles}</div>
-        <div style="font-size:.65rem;color:var(--muted)">${pct(rs.titles,rs.songs)}</div>
-      </div>
-      <div style="background:var(--vinyl);border-radius:8px;padding:.5rem .6rem;text-align:center">
-        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Covers</div>
-        <div style="font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--cream)">${rs.covers}</div>
-        <div style="font-size:.65rem;color:var(--muted)">${pct(rs.covers,rs.songs)}</div>
-      </div>
-      <div style="background:var(--vinyl);border-radius:8px;padding:.5rem .6rem;text-align:center">
-        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Originals</div>
-        <div style="font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--cream)">${rs.originals}</div>
-        <div style="font-size:.65rem;color:var(--muted)">${pct(rs.originals,rs.songs)}</div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted);padding:.25rem 0">
-      <span>Songs played: <strong style="color:var(--cream)">${rs.songs}</strong></span>
-      <span>Skipped: <strong style="color:var(--cream)">${rs.skips}</strong></span>
-    </div>`;
-  const maxScore=Math.max(...teamScores);
-  let boardHtml='';
-  teamNames.forEach((name,i)=>{
-    const lead=teamScores[i]===maxScore;
-    boardHtml+=`<div class="sb-row"><span class="sb-team">${name}</span><span class="sb-pts${lead?' lead':''}">${teamScores[i]}</span></div>`;
-  });
-  $('re-board').innerHTML=boardHtml;
-
-  // Determine what happens after this turn
-  const isRoundEnd=(teamsPlayedThisRound+1)>=activeTeamIndices.length;
-  const btn=$('next-turn-btn');
-
-  // Go straight to stats page — skip intermediate screen
-  // Ensure roundSongHistory only has scored songs
-  roundSongHistory=roundSongHistory.filter(s=>s.pts>0);
   viewStats('roundend');
 }
+
 async function nextTurn(){
   teamsPlayedThisRound++;
-  const roundComplete=activeTeamIndices.length===1||teamsPlayedThisRound>=activeTeamIndices.length;
+  const roundComplete=teamsPlayedThisRound>=activeTeamIndices.length;
 
   if(roundComplete){
-    roundNumber++;teamsPlayedThisRound=0;
+    roundNumber++;
+    teamsPlayedThisRound=0;
+    roundSongHistory=[]; // reset for new round
 
-    // Check win condition — someone hit winPts
-    if(winTriggeredBy!==-1){
+    // Solo play: end game if winning score reached
+    if(teamNames.length===1){
+      if(teamScores[0]>=winPts){showWinner();return;}
+    } else if(winTriggeredBy!==-1){
+      // Check win by 3
       const winScore=teamScores[winTriggeredBy];
-      const otherScores=activeTeamIndices.filter(i=>i!==winTriggeredBy).map(i=>teamScores[i]);
-      const maxOther=otherScores.length>0?Math.max(...otherScores):0;
-
-      // Solo play — win immediately
-      if(teamNames.length===1){showWinner();return;}
-
-      // Multi-team — must win by 3
+      const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==winTriggeredBy).map(i=>teamScores[i]));
       if(winScore-maxOther>=3){showWinner();return;}
 
-      // Not enough lead — check eliminations
+      // Eliminate teams more than 3 behind leader
       const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
-      const toEliminate=activeTeamIndices.filter(i=>topScore-teamScores[i]>3);
-      if(toEliminate.length>0&&toEliminate.length<activeTeamIndices.length){
-        activeTeamIndices=activeTeamIndices.filter(i=>!toEliminate.includes(i));
+      const toElim=activeTeamIndices.filter(i=>topScore-teamScores[i]>3);
+      if(toElim.length>0&&toElim.length<activeTeamIndices.length){
+        activeTeamIndices=activeTeamIndices.filter(i=>!toElim.includes(i));
         if(activeTeamIndices.length===1){showWinner();return;}
-        showEliminationScreen(toEliminate);
+        showEliminationScreen(toElim);
         winTriggeredBy=-1;
         return;
       }
-      // No elimination — reset trigger and keep playing
+      // Not enough lead yet — keep playing
       winTriggeredBy=-1;
     }
   }
 
-  // Advance to next ACTIVE team
-  const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
-  const nextPos=(currentPos+1)%activeTeamIndices.length;
-  currentTeamIdx=activeTeamIndices[nextPos];
-  showScreen('game');await beginRound();
-}
-function showEliminationScreen(eliminatedIndices){
-  const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
-  const eliminatedNames=eliminatedIndices.map(i=>teamNames[i]+' ('+teamScores[i]+' pts)').join(', ');
-  const remainingNames=activeTeamIndices.map(i=>teamNames[i]+': '+teamScores[i]+' pts').join(', ');
-
-  $('elim-message').textContent='The lead is too great - some teams have been eliminated!';
-  $('elim-eliminated').style.display='block';
-  $('elim-eliminated-names').textContent=eliminatedNames;
-  $('elim-remaining-names').innerHTML=activeTeamIndices.map(i=>
-    `<span style="display:block">${teamNames[i]}: <strong style="color:var(--gold)">${teamScores[i]} pts</strong></span>`
-  ).join('');
-  $('elim-round-num').textContent=roundNumber;
-  showScreen('elimination');
-}
-
-async function continueAfterElimination(){
-  currentTeamIdx=activeTeamIndices[0];
-  showScreen('game');await beginRound();
+  // Advance to next active team
+  const pos=activeTeamIndices.indexOf(currentTeamIdx);
+  currentTeamIdx=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+  showScreen('game');
+  await beginRound();
 }
 
 function showWinner(){
   gameOver=true;
-  let winIdx=0;
-  teamScores.forEach((s,i)=>{if(s>teamScores[winIdx])winIdx=i});
+  const winIdx=teamScores.indexOf(Math.max(...teamScores));
   winnerName=teamNames[winIdx];
   viewStats('winner');
 }
-let winnerName='';
+
 async function playAgain(){
   teamScores=teamNames.map(()=>0);
-  teamStats=teamNames.map(()=>({titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0}));
-  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
-  currentTeamIdx=0;winTriggeredBy=-1;roundNumber=1;teamsPlayedThisRound=0;
-  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
-  activeTeamIndices=teamNames.map((_,i)=>i);gameOver=false;
-  playedUris=new Set();carryOverSong=null;carryOverQueue=[];pendingCarryOverQueue=[];songHistory=[];roundSongHistory=[];prevSongData=null;nextSongSlot=null;isNavigating=false;currentSongChecks=null;shuffle(tracks);idx=0;
-  renderScoreHeader();showScreen('game');await beginRound();
+  activeTeamIndices=teamNames.map((_,i)=>i);
+  currentTeamIdx=0;
+  roundNumber=1;
+  teamsPlayedThisRound=0;
+  winTriggeredBy=-1;
+  gameOver=false;
+  winnerName='';
+  playedUris=new Set();
+  songHistory=[];
+  roundSongHistory=[];
+  currentSong=null;
+  prevSongData=null;
+  shuffle(tracks);idx=0;
+  renderScoreHeader();
+  showScreen('game');
+  await beginRound();
 }
 
 // ── STATS ──
-let statsContext='roundend'; // 'roundend' or 'winner'
-function viewStats(ctx){statsContext=ctx||'roundend';showScreen('stats');renderStats()}
+
+let statsContext='roundend';
+function viewStats(ctx){
+  statsContext=ctx||'roundend';
+  showScreen('stats');
+  renderStats();
+}
 
 function renderStats(){
   const el=$('stats-content');
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
   let html='';
 
-  // ── Scoreboard — with winner heading if game over ──
-  const scoreChips=teamNames.map((n,i)=>
+  // Scoreboard
+  const heading=gameOver&&winnerName?
+    '<div style="font-family:Playfair Display,serif;font-size:1.4rem;color:var(--gold);margin-bottom:.4rem">🏆 '+winnerName+' Wins!</div>':'';
+  const chips=teamNames.map((n,i)=>
     '<div style="text-align:center">'+
     '<div style="font-size:.72rem;color:var(--muted)">'+n+'</div>'+
     '<div style="font-family:Playfair Display,serif;font-size:2rem;font-weight:700;color:'+colors[i%colors.length]+'">'+teamScores[i]+'</div>'+
     '</div>'
   ).join('<div style="color:var(--muted);align-self:center;padding:0 4px">·</div>');
-  const heading=gameOver&&winnerName?
-    '<div style="font-family:Playfair Display,serif;font-size:1.5rem;color:var(--gold);margin-bottom:.5rem">🏆 '+winnerName+' Wins!</div>':'';
   html+='<div class="stats-team-card" style="text-align:center">'+
     heading+
     '<div class="stats-section-label">'+(gameOver?'Final Score':'Current Score')+'</div>'+
-    '<div style="display:flex;justify-content:center;align-items:center;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">'+scoreChips+'</div>'+
+    '<div style="display:flex;justify-content:center;align-items:center;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">'+chips+'</div>'+
     '</div>';
 
-  // ── Per-team song tables ──
-  // Between rounds: only show scored songs from this turn (roundSongHistory)
-  // End of game: show all songs ever played (songHistory)
-  // Between rounds: scored songs this turn only
-  // End of game: all songs (scored + unscored)
-  const sourceHistory=gameOver
-    ? songHistory
-    : roundSongHistory.filter(s=>s.pts>0);
-
-  const byTeam={};
-  sourceHistory.forEach(s=>{
-    if(!byTeam[s.team])byTeam[s.team]=[];
-    byTeam[s.team].push(s);
-  });
+  // Per-team song tables
+  // Between rounds: songs from roundSongHistory (this round so far)
+  // End of game: all songs from songHistory
+  const source=gameOver?songHistory:roundSongHistory;
 
   teamNames.forEach((name,i)=>{
     const color=colors[i%colors.length];
-    const songs=byTeam[name]||[];
+    const songs=source.filter(s=>s.team===name);
     html+='<div class="stats-team-card">';
     html+='<div class="stats-team-name" style="color:'+color+'">'+name+'</div>';
     if(songs.length>0){
@@ -1187,190 +1012,37 @@ function renderStats(){
         '<th style="text-align:right;padding:4px 4px;font-size:.68rem;color:var(--muted);font-weight:500">Pts</th></tr>';
       songs.forEach(s=>{
         const ptColor=s.pts>0?'var(--green)':'#666';
-        const ptDisplay=s.pts>0?'+'+s.pts:'—';
         html+='<tr style="border-bottom:1px solid #2a2a2a">'+
-          '<td style="padding:6px 6px;font-weight:500;font-size:.78rem">'+s.title+'</td>'+
+          '<td style="padding:6px 6px;font-weight:500">'+s.title+'</td>'+
           '<td style="padding:6px 4px;color:var(--muted);font-size:.72rem">'+s.cover+'</td>'+
           '<td style="padding:6px 4px;color:var(--muted);font-size:.72rem;font-style:italic">'+s.original+'</td>'+
-          '<td style="padding:6px 4px;text-align:right;color:'+ptColor+';font-family:Playfair Display,serif;font-weight:700">'+ptDisplay+'</td>'+
+          '<td style="padding:6px 4px;text-align:right;color:'+ptColor+';font-family:Playfair Display,serif;font-weight:700">'+(s.pts>0?'+'+s.pts:'—')+'</td>'+
           '</tr>';
       });
       html+='</table>';
     } else {
-      html+='<div style="font-size:.82rem;color:var(--muted);padding:.5rem 0">No songs played</div>';
+      html+='<div style="font-size:.82rem;color:var(--muted);padding:.5rem 0">No songs this round</div>';
     }
     html+='</div>';
   });
 
   el.innerHTML=html;
 
-  // Footer buttons based on where we came from
+  // Footer buttons
   const footer=$('stats-footer');
   if(!gameOver){
-    const currentPos=activeTeamIndices.indexOf(currentTeamIdx);
-    const nextI=activeTeamIndices[(currentPos+1)%activeTeamIndices.length];
-    const isRoundDone=(teamsPlayedThisRound+1)>=activeTeamIndices.length;
-    const btnLabel=isRoundDone?'Start Round '+(roundNumber+1)+' ►':teamNames[nextI]+"'s Turn ►";
-    footer.innerHTML=`
-      <button class="continue-btn" onclick="nextTurn()">${btnLabel}</button>
-      <button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px" onclick="confirmStop()">&#9632; End Game</button>`;
+    const pos=activeTeamIndices.indexOf(currentTeamIdx);
+    const nextI=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+    const isRoundEnd=(teamsPlayedThisRound)>=activeTeamIndices.length;
+    const label=isRoundEnd?'Start Round '+roundNumber+' ►':teamNames[nextI]+"'s Turn ►";
+    footer.innerHTML=
+      '<button class="continue-btn" onclick="nextTurn()">'+label+'</button>'+
+      '<button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px;margin-top:.5rem" onclick="confirmStop()">■ End Game</button>';
   } else {
-    footer.innerHTML=`
-      <button class="continue-btn" onclick="playAgain()">Play Again &#9654;</button>
-      <button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px" onclick="showScreen('login')">Back to Home</button>`;
+    footer.innerHTML=
+      '<button class="continue-btn" onclick="playAgain()">Play Again ►</button>'+
+      '<button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px;margin-top:.5rem" onclick="goHome()">Back to Home</button>';
   }
-}
-
-function bestCat(s){
-  const cats={Titles:s.titles,'Cover Artists':s.covers,'Original Artists':s.originals};
-  return Object.entries(cats).sort((a,b)=>b[1]-a[1])[0][0];
-}
-
-// ── PAUSE / STOP ──
-let paused=false;
-
-function togglePause(){
-  paused=!paused;
-  const btn=$('pause-btn');
-  if(paused){
-    // Pausing
-    clearInterval(timer);timer=null;
-    pauseSpotify();
-    btn.textContent='▶ Resume';
-    btn.classList.add('paused');
-  } else {
-    // Resuming — restart timer and Spotify
-    timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
-    fetch('https://api.spotify.com/v1/me/player/play'+(deviceId?'?device_id='+deviceId:''),{
-      method:'PUT',
-      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}
-    }).catch(()=>{});
-    btn.textContent='❚❚ Pause';
-    btn.classList.remove('paused');
-  }
-}
-
-function resumeFromPause(){
-  // Called when Skip/Next pressed while paused — just restarts timer
-  // Spotify is handled by the subsequent playTrack() call in loadSong()
-  if(!paused)return;
-  paused=false;
-  timer=setInterval(()=>{timeLeft--;drawTimer();if(timeLeft<=0)endRound()},1000);
-  const btn=$('pause-btn');
-  if(btn){btn.textContent='❚❚ Pause';btn.classList.remove('paused');}
-}
-
-function confirmStop(){
-  if(confirm('Stop the current game and return to the home screen?')){
-    stopTimer();
-    paused=false;
-    pauseSpotify();
-    scores={a:0,b:0};team='a';
-  stats={
-    a:{titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0},
-    b:{titles:0,covers:0,originals:0,skips:0,songs:0,points:0,rounds:0}
-  };
-  roundStats={titles:0,covers:0,originals:0,skips:0,songs:0,points:0};
-  playedUris=new Set();idx=0;tracks=[];
-    showScreen('login');
-  }
-}
-
-// ── SETUP HELPERS ──
-function changeTeamCount(delta){
-  teamCount=Math.min(8,Math.max(1,teamCount+delta));
-  $('team-count-display').textContent=teamCount;
-  renderTeamInputs();
-}
-
-function renderTeamInputs(){
-  const container=$('team-names-container');
-  if(!container)return;
-  const defaults=['Team A','Team B','Team C','Team D','Team E','Team F','Team G','Team H'];
-  let html='';
-  for(let i=0;i<teamCount;i++){
-    const prev=document.getElementById('team-name-'+i);
-    const val=prev?prev.value:(defaults[i]||'Team '+(i+1));
-    html+=`<input class="team-name-input" id="team-name-${i}" type="text" placeholder="${defaults[i]||'Team '+(i+1)}" value="${val}" maxlength="20">`;
-  }
-  container.innerHTML=html;
-}
-
-function adjustNum(id,delta){
-  const el=$(id);
-  const disp=$(id+'-display');
-  const min=id==='win-pts'?5:15;
-  const max=id==='win-pts'?200:300;
-  const val=Math.min(max,Math.max(min,(parseInt(el.value)||0)+delta));
-  el.value=val;
-  disp.textContent=val;
-}
-
-// ── GOOGLE SHEETS SYNC ──
-
-async function fetchSheet(){
-  // Use JSONP to bypass CORS — Apps Script supports callback parameter
-  const d=await jsonpFetch(APPS_SCRIPT_URL+'?t='+Date.now());
-  if(d.error)throw new Error(d.error);
-  return d.rows||[];
-}
-
-
-function jsonpFetch(url){
-  // Use script tag to bypass CORS — works with Apps Script GET endpoints
-  return new Promise((resolve,reject)=>{
-    const cbName='utc_cb_'+Date.now();
-    const script=document.createElement('script');
-    const timeout=setTimeout(()=>{
-      delete window[cbName];
-      document.head.removeChild(script);
-      reject(new Error('Request timed out'));
-    },10000);
-    window[cbName]=function(data){
-      clearTimeout(timeout);
-      delete window[cbName];
-      document.head.removeChild(script);
-      resolve(data);
-    };
-    script.src=url+(url.includes('?')?'&':'?')+'callback='+cbName;
-    script.onerror=()=>{
-      clearTimeout(timeout);
-      delete window[cbName];
-      reject(new Error('Script load failed'));
-    };
-    document.head.appendChild(script);
-  });
-}
-
-async function writeToSheet(rowData){
-  // Check for duplicate URI before writing
-  const uri=rowData[0];
-  try{
-    const existing=await fetchSheet();
-    const duplicate=existing.find(r=>r.uri===uri&&r.status!=='removed');
-    if(duplicate){
-      throw new Error('"'+rowData[1]+'" is already in the game database.');
-    }
-  }catch(e){
-    if(e.message.includes('already in the game'))throw e;
-    // If sheet check fails, proceed anyway
-  }
-  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'append',data:JSON.stringify(rowData)}).toString();
-  await fetch(url,{mode:'no-cors',redirect:'follow'});
-  await new Promise(res=>setTimeout(res,2000));
-}
-
-async function updateSheetRow(rowIndex, values){
-  // Pad to 5 columns to ensure all cells are written
-  const padded=[...values];
-  while(padded.length<5)padded.push('');
-  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'update',rowIndex,data:JSON.stringify(padded)}).toString();
-  await fetch(url,{mode:'no-cors',redirect:'follow'});
-  await new Promise(res=>setTimeout(res,2000));
-}
-
-async function deleteSheetRow(rowIndex){
-  return updateSheetRow(rowIndex,[null,null,null,null,'removed']);
 }
 
 // ── ADMIN ──
