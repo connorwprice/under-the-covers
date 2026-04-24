@@ -899,17 +899,6 @@ function endRound(){
     recordSong(currentSong,pts,t,cv,o);
   }
 
-  // Check if this completes a full round and a winner exists
-  const isLastTeam=(teamsPlayedThisRound+1)>=activeTeamIndices.length;
-  if(isLastTeam&&winTriggeredBy!==-1){
-    const winScore=teamScores[winTriggeredBy];
-    const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==winTriggeredBy).map(i=>teamScores[i]));
-    if(winScore-maxOther>=3){showWinner();return;}
-  }
-  if(isLastTeam&&teamNames.length===1&&teamScores[0]>=winPts){
-    showWinner();return;
-  }
-
   viewStats('roundend');
 }
 
@@ -926,13 +915,17 @@ async function nextTurn(){
     if(teamNames.length===1){
       if(teamScores[0]>=winPts){showWinner();return;}
     } else if(winTriggeredBy!==-1){
-      // Check win by 3
-      const winScore=teamScores[winTriggeredBy];
-      const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==winTriggeredBy).map(i=>teamScores[i]));
-      if(winScore-maxOther>=3){showWinner();return;}
-
-      // Eliminate teams more than 3 behind leader
+      // Someone hit winPts — check if they lead by 3+
       const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
+      const topIdx=teamScores.indexOf(topScore);
+      const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==topIdx).map(i=>teamScores[i]));
+
+      if(topScore-maxOther>=3){
+        winTriggeredBy=topIdx; // ensure winner is current leader
+        showWinner();return;
+      }
+
+      // Check eliminations — teams more than 3 behind leader
       const toElim=activeTeamIndices.filter(i=>topScore-teamScores[i]>3);
       if(toElim.length>0&&toElim.length<activeTeamIndices.length){
         activeTeamIndices=activeTeamIndices.filter(i=>!toElim.includes(i));
@@ -941,8 +934,8 @@ async function nextTurn(){
         winTriggeredBy=-1;
         return;
       }
-      // Not enough lead yet — keep playing
-      winTriggeredBy=-1;
+      // Lead not enough yet — keep playing, but don't reset winTriggeredBy
+      // so we keep checking each round
     }
   }
 
