@@ -439,6 +439,7 @@ let active=false;
 let paused=false;
 let chks={title:false,cover:false,original:false};
 let roundPts=0;
+let currentSongAttemptedBy=new Set(); // tracks which teams have attempted the current song (for retry chain)
 
 // ── SONG STATE ──
 let currentSong=null;    // {t,c,o,uri} currently displayed
@@ -447,7 +448,11 @@ let nextSongData=null;   // queued next song when Prev was pressed (with saved c
 let playedUris=new Set(); // URIs heard this game (never replayed)
 let songHistory=[];      // all songs heard: {title,cover,original,uri,team,pts}
 let roundSongHistory=[]; // scored songs since last full-round reset
-let recycleQueue=[];     // songs scored 0 — queued for the other team next turn; each entry includes queuedByTeam
+
+// ── RETRY QUEUES ──
+// retryQueues[teamIdx] = array of {song, attemptedBy: Set of teamIdx}
+// A song moves forward one team at a time until someone scores or all teams fail.
+let retryQueues=[];      // initialised in startGame/playAgain
 
 // ── MUSIC PROVIDER ──
 // musicProvider is the single interface the game uses for all playback.
@@ -716,7 +721,7 @@ async function startGame(){
   roundSongHistory=[];
   currentSong=null;
   prevSongData=null;
-  recycleQueue=[];
+  retryQueues=teamNames.map(()=>[]);
 
   // Show a loading state on setup page while we prepare
   const startBtn=document.querySelector('.start-btn');
@@ -772,6 +777,7 @@ async function beginRound(){
   currentSong=null;
   prevSongData=null;
   nextSongData=null;
+  currentSongAttemptedBy=new Set();
 
   // Update turn bar
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
@@ -816,20 +822,25 @@ function songAlreadyPlayed(uri,title){
 }
 
 function loadSong(){
-  // Check recycle queue first — songs a team scored 0 on, offered to the next team.
-  while(recycleQueue.length>0){
-    const candidate=recycleQueue[0];
-    if(candidate.queuedByTeam===currentTeamIdx){
-      // This team was the one who failed it — discard and try next
-      recycleQueue.shift();
-      continue;
-    }
-    // Different team queued it — serve it
-    recycleQueue.shift();
-    playedUris.add(candidate.uri);
-    displaySong(candidate);
+  // Serve queued retry songs (FIFO) before any new songs
+  const myQueue=retryQueues[currentTeamIdx];
+  if(myQueue.length>0){
+    const entry=myQueue.shift();
+    currentSongAttemptedBy=entry.attemptedBy; // restore history of who has tried this song
+    displaySong(entry.song);
     return;
   }
+
+  // No queued songs — pull the next unplayed track
+  while(idx<tracks.length && songAlreadyPlayed(tracks[idx].uri,tracks[idx].t)){idx++;}
+  if(idx>=tracks.length){endRound();return;}
+
+  const song=tracks[idx];
+  idx++;
+  if(song.uri)playedUris.add(song.uri);
+  currentSongAttemptedBy=new Set(); // fresh song, no prior attempts
+  displaySong(song);
+}
 
   // Advance past played songs
   while(idx<tracks.length && songAlreadyPlayed(tracks[idx].uri,tracks[idx].t)){idx++;}
@@ -885,7 +896,22 @@ function displaySong(song,savedChecks){
   },800);
 }
 
-// ── SCORING ──
+// ── RETRY QUEUE LOGIC ──
+
+// Called whenever a song scores 0. Passes it to the next team's queue,
+// or discards it if all active teams have already attempted it.
+function passToNextTeam(song, attemptedBy){
+  const pos=activeTeamIndices.indexOf(currentTeamIdx);
+  const nextTeamIdx=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+
+  // If all active teams have now attempted it, discard
+  const allAttempted=activeTeamIndices.every(i=>attemptedBy.has(i));
+  if(allAttempted)return;
+
+  retryQueues[nextTeamIdx].push({song, attemptedBy});
+}
+
+
 
 async function nextSong(){
   if(!active&&!paused)return;
@@ -903,22 +929,19 @@ async function nextSong(){
   const pts=t+cv+o;
   recordSong(scoredSong,pts,t,cv,o);
 
-  // If scored 0, queue this song for the other team next turn
+  // If scored 0, pass to next team's retry queue
   if(pts===0&&scoredSong.uri){
-    const alreadyQueued=recycleQueue.some(s=>s.uri===scoredSong.uri);
-    if(!alreadyQueued){
-      recycleQueue.push({...scoredSong, queuedByTeam: currentTeamIdx});
-    }
+    const attemptedBy=currentSongAttemptedBy;
+    attemptedBy.add(currentTeamIdx);
+    passToNextTeam(scoredSong, attemptedBy);
   }
 
   if(nextSongData){
-    // We had gone back — return to the queued next song
     const queued=nextSongData;
     nextSongData=null;
     prevSongData={...scoredSong,savedChecks:scoredChecks};
     displaySong(queued,queued.savedChecks);
   } else {
-    // Normal forward — save current as prev, load new song
     prevSongData={...scoredSong,savedChecks:scoredChecks};
     nextSongData=null;
     loadSong();
@@ -1052,12 +1075,11 @@ function endRound(){
     const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
     const pts=t+cv+o;
     recordSong(currentSong,pts,t,cv,o);
-    // If scored 0, queue this song for the other team next turn
+    // If scored 0, pass to next team's retry queue
     if(pts===0&&currentSong.uri){
-      const alreadyQueued=recycleQueue.some(s=>s.uri===currentSong.uri);
-      if(!alreadyQueued){
-        recycleQueue.push({...currentSong, queuedByTeam: currentTeamIdx});
-      }
+      const attemptedBy=new Set(currentSongAttemptedBy);
+      attemptedBy.add(currentTeamIdx);
+      passToNextTeam(currentSong, attemptedBy);
     }
   }
 
@@ -1132,7 +1154,7 @@ async function playAgain(){
   currentSong=null;
   prevSongData=null;
   nextSongData=null;
-  recycleQueue=[];
+  retryQueues=teamNames.map(()=>[]);
   shuffle(tracks);idx=0;
   renderScoreHeader();
   showScreen('game');
