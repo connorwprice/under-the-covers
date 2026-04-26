@@ -25,8 +25,8 @@
   .or-row{display:flex;align-items:center;gap:10px;width:100%;color:var(--muted);font-size:.8rem}
   .or-row::before,.or-row::after{content:'';flex:1;height:1px;background:#333}
   .hint{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.6}
-  .instructions{background:var(--groove);border-radius:12px;padding:1rem 1.25rem;width:100%;display:flex;flex-direction:column;gap:.4rem}
-  .instructions p{font-size:.82rem;color:var(--muted);line-height:1.5;text-align:left}
+  .instructions{display:flex;flex-direction:column;gap:.25rem}
+  .instructions p{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.6;letter-spacing:.3em;text-transform:uppercase}
   #screen-playlist{padding:1.25rem;gap:1rem}
   .screen-header{display:flex;align-items:center;gap:10px;padding-bottom:.5rem}
   .back-btn{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1.3rem;padding:4px 8px 4px 0;line-height:1}
@@ -182,7 +182,7 @@
   <div class="logo-title">Under the Covers</div>
   <div class="logo-sub">The Cover Song Trivia Game</div>
   <div class="instructions">
-    <p>It's a music trivia game.</p>
+    <p>Instructions:</p>
     <p>Every song is a cover song.</p>
     <p>There are three points awarded for every song: title of the song, cover artist, original artist.</p>
     <p>Open outcry format.</p>
