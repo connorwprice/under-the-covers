@@ -447,8 +447,7 @@ let nextSongData=null;   // queued next song when Prev was pressed (with saved c
 let playedUris=new Set(); // URIs heard this game (never replayed)
 let songHistory=[];      // all songs heard: {title,cover,original,uri,team,pts}
 let roundSongHistory=[]; // scored songs since last full-round reset
-let recycleQueue=[];     // songs scored 0 — queued for the other team next turn
-let recycledByTeam={};   // uri -> set of teamIdx that have already tried this recycled song
+let recycleQueue=[];     // songs scored 0 — queued for the other team next turn; each entry includes queuedByTeam
 
 // ── MUSIC PROVIDER ──
 // musicProvider is the single interface the game uses for all playback.
@@ -718,7 +717,6 @@ async function startGame(){
   currentSong=null;
   prevSongData=null;
   recycleQueue=[];
-  recycledByTeam={};
 
   // Show a loading state on setup page while we prepare
   const startBtn=document.querySelector('.start-btn');
@@ -818,28 +816,17 @@ function songAlreadyPlayed(uri,title){
 }
 
 function loadSong(){
-  // Check recycle queue first — songs the other team scored 0 on.
-  // Only serve a recycled song if the CURRENT team hasn't tried it yet AND
-  // it wasn't just queued by this team during this same turn (i.e. it must
-  // have been queued by a different team).
-  console.log('[loadSong] recycleQueue:', recycleQueue.map(s=>s.t), '| currentTeamIdx:', currentTeamIdx, '| recycledByTeam:', JSON.stringify(Object.fromEntries(Object.entries(recycledByTeam).map(([k,v])=>[k,[...v]]))));
+  // Check recycle queue first — songs a team scored 0 on, offered to the next team.
   while(recycleQueue.length>0){
     const candidate=recycleQueue[0];
-    const triedByThisTeam=(recycledByTeam[candidate.uri]||new Set()).has(currentTeamIdx);
-    console.log('[loadSong] candidate:', candidate.t, '| triedByThisTeam:', triedByThisTeam);
-    if(triedByThisTeam){
-      // This team already tried it (or just queued it) — discard and check next
+    if(candidate.queuedByTeam===currentTeamIdx){
+      // This team was the one who failed it — discard and try next
       recycleQueue.shift();
       continue;
     }
-    // Good — this team hasn't tried it yet
+    // Different team queued it — serve it
     recycleQueue.shift();
-    // Mark this team as having tried it
-    if(!recycledByTeam[candidate.uri])recycledByTeam[candidate.uri]=new Set();
-    recycledByTeam[candidate.uri].add(currentTeamIdx);
-    // Ensure it stays in playedUris so normal tracks don't re-serve it
     playedUris.add(candidate.uri);
-    console.log('[loadSong] serving recycled song:', candidate.t);
     displaySong(candidate);
     return;
   }
@@ -920,12 +907,7 @@ async function nextSong(){
   if(pts===0&&scoredSong.uri){
     const alreadyQueued=recycleQueue.some(s=>s.uri===scoredSong.uri);
     if(!alreadyQueued){
-      recycleQueue.push({...scoredSong});
-      if(!recycledByTeam[scoredSong.uri])recycledByTeam[scoredSong.uri]=new Set();
-      recycledByTeam[scoredSong.uri].add(currentTeamIdx);
-      console.log('[nextSong] queued 0-score song:', scoredSong.t, '| team:', currentTeamIdx, '| recycleQueue now:', recycleQueue.map(s=>s.t));
-    } else {
-      console.log('[nextSong] song already queued, skipping:', scoredSong.t);
+      recycleQueue.push({...scoredSong, queuedByTeam: currentTeamIdx});
     }
   }
 
@@ -1074,9 +1056,7 @@ function endRound(){
     if(pts===0&&currentSong.uri){
       const alreadyQueued=recycleQueue.some(s=>s.uri===currentSong.uri);
       if(!alreadyQueued){
-        recycleQueue.push({...currentSong});
-        if(!recycledByTeam[currentSong.uri])recycledByTeam[currentSong.uri]=new Set();
-        recycledByTeam[currentSong.uri].add(currentTeamIdx);
+        recycleQueue.push({...currentSong, queuedByTeam: currentTeamIdx});
       }
     }
   }
@@ -1153,7 +1133,6 @@ async function playAgain(){
   prevSongData=null;
   nextSongData=null;
   recycleQueue=[];
-  recycledByTeam={};
   shuffle(tracks);idx=0;
   renderScoreHeader();
   showScreen('game');
