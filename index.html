@@ -842,19 +842,6 @@ function loadSong(){
   displaySong(song);
 }
 
-  // Advance past played songs
-  while(idx<tracks.length && songAlreadyPlayed(tracks[idx].uri,tracks[idx].t)){idx++;}
-  if(idx>=tracks.length){endRound();return;}
-
-  const song=tracks[idx];
-  idx++;
-
-  // Mark as played immediately
-  if(song.uri)playedUris.add(song.uri);
-
-  displaySong(song);
-}
-
 function displaySong(song,savedChecks){
   const title=song.t||'';
   const cover=song.c||'';
@@ -911,8 +898,6 @@ function passToNextTeam(song, attemptedBy){
   retryQueues[nextTeamIdx].push({song, attemptedBy});
 }
 
-
-
 async function nextSong(){
   if(!active&&!paused)return;
   const scoredSong=currentSong?{...currentSong}:null;
@@ -931,7 +916,7 @@ async function nextSong(){
 
   // If scored 0, pass to next team's retry queue
   if(pts===0&&scoredSong.uri){
-    const attemptedBy=currentSongAttemptedBy;
+    const attemptedBy=new Set(currentSongAttemptedBy);
     attemptedBy.add(currentTeamIdx);
     passToNextTeam(scoredSong, attemptedBy);
   }
