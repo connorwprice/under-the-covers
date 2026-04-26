@@ -449,6 +449,7 @@ let paused=false;
 let chks={title:false,cover:false,original:false};
 let roundPts=0;
 let currentSongAttemptedBy=new Set(); // tracks which teams have attempted the current song (for retry chain)
+let songElapsedSecs=0; // seconds elapsed on the current song (resets on each new song)
 
 // ── SONG STATE ──
 let currentSong=null;    // {t,c,o,uri} currently displayed
@@ -787,6 +788,11 @@ async function beginRound(){
   prevSongData=null;
   nextSongData=null;
   currentSongAttemptedBy=new Set();
+  songElapsedSecs=0;
+
+  // Next button starts disabled each round
+  const nb=document.querySelector('.next-btn');
+  if(nb)nb.disabled=true;
 
   // Update turn bar
   const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
@@ -858,6 +864,10 @@ function displaySong(song,savedChecks){
   const uri=song.uri||null;
 
   currentSong={t:title,c:cover,o:original,uri};
+
+  // Reset per-song elapsed counter and re-evaluate next button
+  songElapsedSecs=0;
+  updateNextBtn();
 
   // Restore saved checkboxes or reset to zero
   if(savedChecks){
@@ -1009,8 +1019,10 @@ function startTimer(){
   timeLeft=roundSecs;
   drawTimer();
   timer=setInterval(()=>{
+    if(!paused){songElapsedSecs++;}
     timeLeft--;
     drawTimer();
+    updateNextBtn();
     if(timeLeft<=0){
       stopTimer();
       pauseSpotify();
@@ -1236,11 +1248,24 @@ function renderStats(){
   }
 }
 
+// ── NEXT BUTTON STATE ──
+// Enabled when: 30s elapsed on current song OR all 3 boxes checked.
+// Disabled when: ≤5s remain on the game timer, or neither condition above is met.
+function updateNextBtn(){
+  const btn=document.querySelector('.next-btn');
+  if(!btn)return;
+  const allChecked=chks.title&&chks.cover&&chks.original;
+  const thirtyElapsed=songElapsedSecs>=30;
+  const nearEnd=timeLeft<=5&&active; // only suppress during live timer, not grace period
+  btn.disabled=nearEnd||(!allChecked&&!thirtyElapsed);
+}
+
 // ── CHECKBOX TOGGLE ──
 function toggle(cat){
   chks[cat]=!chks[cat];
   const el=$('chk-'+cat);
   if(el)el.className='chk'+(chks[cat]?' on':'');
+  updateNextBtn();
 }
 
 // ── SETUP HELPERS ──
@@ -1289,7 +1314,9 @@ function togglePause(){
 function resumeGame(){
   paused=false;
   timer=setInterval(()=>{
+    songElapsedSecs++;
     timeLeft--;drawTimer();
+    updateNextBtn();
     if(timeLeft<=0){stopTimer();pauseSpotify();showGracePeriod();}
   },1000);
   if(musicProvider)musicProvider.resume().catch(()=>{});
