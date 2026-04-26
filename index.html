@@ -703,7 +703,7 @@ async function startGame(){
     teamNames.push(inp&&inp.value.trim()?inp.value.trim():'Team '+(i+1));
   }
   winPts=parseInt($('win-pts').value)||25;
-  roundSecs=parseInt($('round-secs').value)||60;
+  roundSecs=Math.max(30,parseInt($('round-secs').value)||60);
 
   // Init scores and round tracking
   teamScores=teamNames.map(()=>0);
@@ -1257,7 +1257,7 @@ function renderTeamInputs(){
 function adjustNum(id,delta){
   const el=$(id);
   const disp=$(id+'-display');
-  const min=id==='win-pts'?5:15;
+  const min=id==='win-pts'?5:30;
   const max=id==='win-pts'?200:300;
   const val=Math.min(max,Math.max(min,(parseInt(el.value)||0)+delta));
   el.value=val;
