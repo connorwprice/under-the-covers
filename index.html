@@ -1198,13 +1198,14 @@ function renderStats(){
     '</div>';
 
   // Per-team song tables
-  // Between rounds: songs from roundSongHistory (this round so far)
-  // End of game: all songs from songHistory
+  // Between rounds: songs from roundSongHistory, excluding any still in a retry queue
+  // End of game: all songs from songHistory (retry queues are empty/irrelevant)
   const source=gameOver?songHistory:roundSongHistory;
+  const queuedUris=gameOver?new Set():new Set(retryQueues.flat().map(e=>e.song.uri).filter(Boolean));
 
   teamNames.forEach((name,i)=>{
     const color=colors[i%colors.length];
-    const songs=source.filter(s=>s.team===name);
+    const songs=source.filter(s=>s.team===name&&!queuedUris.has(s.uri));
     html+='<div class="stats-team-card">';
     html+='<div class="stats-team-name" style="color:'+color+'">'+name+'</div>';
     if(songs.length>0){
