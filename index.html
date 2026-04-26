@@ -437,7 +437,6 @@ let winnerName='';
 // ── ROUND STATE ──
 let active=false;
 let paused=false;
-let timerExpired=false; // true once the round timer hits 0; blocks nextSong/playTrack
 let chks={title:false,cover:false,original:false};
 let roundPts=0;
 
@@ -770,7 +769,6 @@ function renderScoreHeader(){
 async function beginRound(){
   active=true;
   paused=false;
-  timerExpired=false;
   roundPts=0;
   chks={title:false,cover:false,original:false};
   currentSong=null;
@@ -883,7 +881,7 @@ function displaySong(song,savedChecks){
   $('ans-cover').textContent='—';
   $('ans-original').textContent='—';
 
-  if(uri&&active&&!timerExpired)playTrack(uri);
+  if(uri&&active)playTrack(uri);
 
   setTimeout(()=>{
     $('s-name').textContent=title;
@@ -898,7 +896,6 @@ function displaySong(song,savedChecks){
 
 async function nextSong(){
   if(!active&&!paused)return;
-  if(timerExpired)return; // timer beat the button — do nothing, grace period handles scoring
   const scoredSong=currentSong?{...currentSong}:null;
   const scoredChecks={...chks};
 
@@ -1008,8 +1005,7 @@ function startTimer(){
     drawTimer();
     if(timeLeft<=0){
       stopTimer();
-      timerExpired=true;  // block any in-flight nextSong from starting new playback
-      pauseSpotify();     // fire-and-forget is safe — timerExpired already blocks re-play
+      pauseSpotify();
       showGracePeriod();
     }
   },1000);
