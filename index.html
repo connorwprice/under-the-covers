@@ -1251,15 +1251,15 @@ function renderStats(){
 }
 
 // ── NEXT BUTTON STATE ──
-// Enabled when: 30s elapsed on current song OR all 3 boxes checked.
+// Enabled when: 15s elapsed on current song OR at least 1 score box checked.
 // Disabled when: ≤5s remain on the game timer, or neither condition above is met.
 function updateNextBtn(){
   const btn=document.querySelector('.next-btn');
   if(!btn)return;
-  const allChecked=chks.title&&chks.cover&&chks.original;
-  const thirtyElapsed=songElapsedSecs>=30;
+  const anyChecked=chks.title||chks.cover||chks.original;
+  const fifteenElapsed=songElapsedSecs>=15;
   const nearEnd=timeLeft<=5&&active; // only suppress during live timer, not grace period
-  btn.disabled=nearEnd||(!allChecked&&!thirtyElapsed);
+  btn.disabled=nearEnd||(!anyChecked&&!fifteenElapsed);
 }
 
 // ── CHECKBOX TOGGLE ──
