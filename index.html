@@ -417,13 +417,17 @@ window.onunhandledrejection=function(e){
   showLoginError('Error: '+(e.reason?.message||String(e.reason)));
 };
 const CLIENT_ID = '274caba37a3d41ef917a10b396e54987';
+const SHEET_ID = '1BFnqxz-wWE_j8CiDO4kV_kN45Sb0YarKJ5HRAYA9QU8';
 // Sheets reads via CSV export, writes via Apps Script
+const SPOTIFY_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
 const ADMIN_PASSWORD = 'utc2024';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_lW3D9rvYKuuM4pNfTE1pz7XMRJxndLp6Jiof4ZEJsJaWbYjrHKTn-7WrIrvtwwN8mQ/exec';
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+
 
 
 // ── STATE ──
-let token=null;
+let token=null,playlists=[],selectedPl=null;
 let tracks=[],idx=0;
 
 // ── TEAM STATE ──
@@ -598,6 +602,10 @@ async function initMusicProvider(type, token) {
   throw new Error('Unknown music provider: ' + type);
 }
 
+// Legacy alias kept so nothing inside game logic needs to change
+let deviceId = null; // still used as a truthy guard in a few places — kept for safety
+let usingSpotify = true;
+
 const $=id=>document.getElementById(id);
 function showScreen(id){
   document.querySelectorAll('.screen,.admin-screen').forEach(s=>s.classList.remove('active'));
@@ -657,6 +665,8 @@ function showLoginError(msg){
   el.style.display='block';
 }
 
+const UTC_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
+
 async function loadPlaylists(){
   usingSpotify=true;
   $('setup-back').onclick=()=>showScreen('login');
@@ -676,8 +686,10 @@ async function initPlayer(){
   // Called once at game start and once at the top of each beginRound.
   try {
     musicProvider = await initMusicProvider(PROVIDER_TYPE, token);
+    deviceId = true; // non-null sentinel so legacy guards don't short-circuit
   } catch(e) {
     setStatus('Could not start player: ' + e.message);
+    deviceId = null;
   }
 }
 
@@ -1239,15 +1251,15 @@ function renderStats(){
 }
 
 // ── NEXT BUTTON STATE ──
-// Enabled when: 30s elapsed on current song OR all 3 boxes checked.
+// Enabled when: 15s elapsed on current song OR at least 1 score box checked.
 // Disabled when: ≤5s remain on the game timer, or neither condition above is met.
 function updateNextBtn(){
   const btn=document.querySelector('.next-btn');
   if(!btn)return;
-  const allChecked=chks.title&&chks.cover&&chks.original;
-  const thirtyElapsed=songElapsedSecs>=30;
+  const anyChecked=chks.title||chks.cover||chks.original;
+  const fifteenElapsed=songElapsedSecs>=15;
   const nearEnd=timeLeft<=5&&active; // only suppress during live timer, not grace period
-  btn.disabled=nearEnd||(!allChecked&&!thirtyElapsed);
+  btn.disabled=nearEnd||(!anyChecked&&!fifteenElapsed);
 }
 
 // ── CHECKBOX TOGGLE ──
