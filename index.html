@@ -241,10 +241,10 @@
       <label>Seconds per round</label>
       <div class="stepper">
         <button onclick="adjustNum('round-secs',-5)">−</button>
-        <span id="round-secs-display">60</span>
+        <span id="round-secs-display">180</span>
         <button onclick="adjustNum('round-secs',5)">+</button>
       </div>
-      <input type="hidden" id="round-secs" value="60">
+      <input type="hidden" id="round-secs" value="180">
       <span>sec</span>
     </div>
   </div>
@@ -264,7 +264,7 @@
         <circle class="r-bg" cx="44" cy="44" r="39" stroke-width="6" fill="none"/>
         <circle class="r-fill" id="r-fill" cx="44" cy="44" r="39" stroke-width="6" fill="none" stroke-linecap="round"/>
       </svg>
-      <div class="t-num" id="t-num">60</div>
+      <div class="t-num" id="t-num">180</div>
     </div>
   </div>
   <div class="song-card">
@@ -436,7 +436,7 @@ let teamNames=[];        // ['Team A','Team B',...]
 let teamScores=[];       // [0,0,...]
 let currentTeamIdx=0;
 let activeTeamIndices=[];
-let winPts=25,roundSecs=60,timeLeft=60;
+let winPts=25,roundSecs=180,timeLeft=180;
 let timer=null,graceTimer=null;
 let roundNumber=1;
 let teamsPlayedThisRound=0;
@@ -714,7 +714,7 @@ async function startGame(){
     teamNames.push(inp&&inp.value.trim()?inp.value.trim():'Team '+(i+1));
   }
   winPts=parseInt($('win-pts').value)||25;
-  roundSecs=Math.max(30,parseInt($('round-secs').value)||60);
+  roundSecs=Math.max(30,parseInt($('round-secs').value)||180);
 
   // Init scores and round tracking
   teamScores=teamNames.map(()=>0);
@@ -1251,15 +1251,15 @@ function renderStats(){
 }
 
 // ── NEXT BUTTON STATE ──
-// Enabled when: 15s elapsed on current song OR at least 1 score box checked.
+// Enabled when: 30s elapsed on current song OR all 3 boxes checked.
 // Disabled when: ≤5s remain on the game timer, or neither condition above is met.
 function updateNextBtn(){
   const btn=document.querySelector('.next-btn');
   if(!btn)return;
-  const anyChecked=chks.title||chks.cover||chks.original;
-  const fifteenElapsed=songElapsedSecs>=15;
+  const allChecked=chks.title&&chks.cover&&chks.original;
+  const thirtyElapsed=songElapsedSecs>=30;
   const nearEnd=timeLeft<=5&&active; // only suppress during live timer, not grace period
-  btn.disabled=nearEnd||(!anyChecked&&!fifteenElapsed);
+  btn.disabled=nearEnd||(!allChecked&&!thirtyElapsed);
 }
 
 // ── CHECKBOX TOGGLE ──
