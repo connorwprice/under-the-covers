@@ -477,78 +477,103 @@ const spotifySDKReady = new Promise(resolve => {
 });
 
 // ── SpotifyProvider ──
-// Implements: init(token), play(uri), pause(), resume(), disconnect()
+// Implements: prepare(token), activate(), init(token), play(uri), pause(), resume(), disconnect()
 // Game logic never calls Spotify directly — always goes through musicProvider.
+//
+// Mobile note: phone browsers only allow audio that starts from a tap. So the
+// player is built early (prepare, right after login), unlocked synchronously
+// by the Start tap (activate), and only then connected (init).
 class SpotifyProvider {
   constructor() {
     this._player = null;
     this._deviceId = null;
     this._token = null;
+    this._pending = null; // {resolve, reject} while a connect is in flight
   }
 
+  // Builds the player and wires its listeners once. No network, no audio.
+  // Requires the SDK script to be loaded (spotifySDKReady).
+  prepare(token) {
+    this._token = token;
+    if (this._player) return;
+
+    const player = new Spotify.Player({
+      name: 'Under the Covers',
+      getOAuthToken: cb => cb(this._token),
+      volume: 0.8
+    });
+
+    player.addListener('ready', async ({ device_id }) => {
+      this._deviceId = device_id;
+      setStatus('🎵 Connecting player...');
+      // Give Spotify's backend ~750ms to register the browser device
+      // before the first play command is issued via the REST API
+      await new Promise(res => setTimeout(res, 750));
+      setStatus('🎵 Ready to play');
+      this._settle(null);
+    });
+
+    player.addListener('not_ready', () => {
+      this._deviceId = null;
+      setStatus('⚠️ Player went offline');
+    });
+
+    player.addListener('initialization_error', ({ message }) => {
+      // Fatal — SDK cannot start at all
+      setStatus('Player error: ' + message);
+      this._settle(new Error(message));
+    });
+
+    player.addListener('authentication_error', () => {
+      // Non-fatal in Development Mode — Spotify's internal web-playback scope
+      // check returns 403 even when correctly configured. Player still reaches
+      // 'ready' with a valid device_id so we swallow this and continue.
+      setStatus('');
+    });
+
+    player.addListener('account_error', ({ message }) => {
+      // Fatal — no Premium account
+      setStatus('⚠️ Spotify Premium required for playback');
+      this._settle(new Error(message));
+    });
+
+    player.addListener('playback_error', ({ message }) => {
+      setStatus('Playback error: ' + message);
+    });
+
+    this._player = player;
+  }
+
+  // Resolves or rejects the in-flight init() promise, if any
+  _settle(err) {
+    if (!this._pending) return;
+    const p = this._pending;
+    this._pending = null;
+    if (err) p.reject(err); else p.resolve();
+  }
+
+  // Unlocks audio on mobile browsers. Must run synchronously inside a
+  // tap handler, before any await. Harmless on desktop.
+  activate() {
+    if (!this._player) return;
+    try {
+      const r = this._player.activateElement();
+      if (r && r.catch) r.catch(() => {});
+    } catch(e) {}
+  }
+
+  // Connects the (already prepared) player. Safe to call more than once.
   async init(token) {
     this._token = token;
-
-    // Tear down any existing player cleanly before re-initialising
-    if (this._player) {
-      try { this._player.disconnect(); } catch(e) {}
-      this._player = null;
-      this._deviceId = null;
-    }
-
-    // Wait for the SDK script to signal it is ready
     await spotifySDKReady;
+    this.prepare(token);
+    if (this._deviceId) return; // already connected
 
     return new Promise((resolve, reject) => {
-      const player = new Spotify.Player({
-        name: 'Under the Covers',
-        getOAuthToken: cb => cb(this._token),
-        volume: 0.8
+      this._pending = { resolve, reject };
+      this._player.connect().then(success => {
+        if (!success) this._settle(new Error('Player failed to connect'));
       });
-
-      player.addListener('ready', async ({ device_id }) => {
-        this._deviceId = device_id;
-        setStatus('🎵 Connecting player...');
-        // Give Spotify's backend ~750ms to register the browser device
-        // before the first play command is issued via the REST API
-        await new Promise(res => setTimeout(res, 750));
-        setStatus('🎵 Ready to play');
-        resolve();
-      });
-
-      player.addListener('not_ready', () => {
-        this._deviceId = null;
-        setStatus('⚠️ Player went offline');
-      });
-
-      player.addListener('initialization_error', ({ message }) => {
-        // Fatal — SDK cannot start at all
-        setStatus('Player error: ' + message);
-        reject(new Error(message));
-      });
-
-      player.addListener('authentication_error', () => {
-        // Non-fatal in Development Mode — Spotify's internal web-playback scope
-        // check returns 403 even when correctly configured. Player still reaches
-        // 'ready' with a valid device_id so we swallow this and continue.
-        setStatus('');
-      });
-
-      player.addListener('account_error', ({ message }) => {
-        // Fatal — no Premium account
-        setStatus('⚠️ Spotify Premium required for playback');
-        reject(new Error(message));
-      });
-
-      player.addListener('playback_error', ({ message }) => {
-        setStatus('Playback error: ' + message);
-      });
-
-      player.connect().then(success => {
-        if (!success) reject(new Error('Player failed to connect'));
-      });
-
-      this._player = player;
     });
   }
 
@@ -593,13 +618,20 @@ class SpotifyProvider {
 // ── PROVIDER FACTORY ──
 // MVP: always returns SpotifyProvider.
 // Future: check saved preference and return AppleMusicProvider, AmazonProvider, etc.
-async function initMusicProvider(type, token) {
-  if (type === 'spotify') {
-    const provider = new SpotifyProvider();
-    await provider.init(token);
-    return provider;
+// One provider instance per page, so the player unlocked by the Start tap is
+// the same one that plays the songs.
+function getMusicProvider(type) {
+  if (!musicProvider) {
+    if (type === 'spotify') musicProvider = new SpotifyProvider();
+    else throw new Error('Unknown music provider: ' + type);
   }
-  throw new Error('Unknown music provider: ' + type);
+  return musicProvider;
+}
+
+async function initMusicProvider(type, token) {
+  const provider = getMusicProvider(type);
+  await provider.init(token);
+  return provider;
 }
 
 // Legacy alias kept so nothing inside game logic needs to change
@@ -672,6 +704,8 @@ async function loadPlaylists(){
   $('setup-back').onclick=()=>showScreen('login');
   showScreen('setup');
   renderTeamInputs();
+  // Build the player now so the Start tap can unlock audio on mobile
+  spotifySDKReady.then(()=>getMusicProvider(PROVIDER_TYPE).prepare(token));
 }
 
 
@@ -682,8 +716,8 @@ async function loadPlaylists(){
 // (init, play, pause, resume, disconnect) and swap in initMusicProvider().
 
 async function initPlayer(){
-  // Initialise (or re-initialise) the music provider.
-  // Called once at game start and once at the top of each beginRound.
+  // Connect the music provider (built earlier in loadPlaylists).
+  // Called once at game start.
   try {
     musicProvider = await initMusicProvider(PROVIDER_TYPE, token);
     deviceId = true; // non-null sentinel so legacy guards don't short-circuit
@@ -707,6 +741,10 @@ function setStatus(m){$('playback-status').textContent=m}
 // ── GAME ──
 
 async function startGame(){
+  // Mobile: unlock audio while still inside the Start tap.
+  // Must stay above the first await in this function.
+  if(musicProvider)musicProvider.activate();
+
   // Collect team names
   teamNames=[];
   for(let i=0;i<teamCount;i++){
