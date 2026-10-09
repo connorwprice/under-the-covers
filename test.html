@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="version" content="2.2">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Under the Covers</title>
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--vinyl:#1a1a1a;--groove:#2d2d2d;--gold:#c8a84b;--gold-light:#e8c96b;--cream:#f5f0e8;--red:#c0392b;--green:#27ae60;--muted:#888}
+  html,body{height:100%;background:var(--vinyl);color:var(--cream);font-family:'DM Sans',sans-serif}
+  #app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+  .screen{display:none;flex-direction:column;flex:1;padding:0}
+  .screen.active{display:flex}
+  #screen-login{align-items:center;justify-content:center;padding:2rem;gap:1.5rem}
+  .logo-vinyl{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#555 0%,#222 28%,#111 29%,#1a1a1a 58%,#111 59%,#1a1a1a 78%,#111 79%,#0a0a0a 100%);margin:0 auto 1rem;position:relative;animation:spin 8s linear infinite;box-shadow:0 0 0 3px var(--gold),0 8px 32px rgba(0,0,0,.7)}
+  .logo-vinyl::after{content:'';width:20px;height:20px;background:var(--gold);border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .logo-title{font-family:'Playfair Display',serif;font-size:2.6rem;font-weight:900;color:var(--gold);text-align:center;line-height:1;letter-spacing:-1px}
+  .logo-sub{font-size:.75rem;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);text-align:center}
+  .spotify-btn{display:flex;align-items:center;justify-content:center;gap:12px;background:#1DB954;color:#fff;border:none;border-radius:50px;padding:15px 28px;font-family:'DM Sans',sans-serif;font-size:1rem;font-weight:500;cursor:pointer;width:100%;transition:background .15s,transform .1s}
+  .spotify-btn:hover{background:#1ed760;transform:scale(1.02)}
+  .or-row{display:flex;align-items:center;gap:10px;width:100%;color:var(--muted);font-size:.8rem}
+  .or-row::before,.or-row::after{content:'';flex:1;height:1px;background:#333}
+  .hint{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.6}
+  .instructions{display:flex;flex-direction:column;gap:.25rem}  .instructions p:first-child{color:var(--cream);font-weight:700}
+  .instructions p{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.6;letter-spacing:.3em;text-transform:uppercase}
+  #screen-playlist{padding:1.25rem;gap:1rem}
+  .screen-header{display:flex;align-items:center;gap:10px;padding-bottom:.5rem}
+  .back-btn{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1.3rem;padding:4px 8px 4px 0;line-height:1}
+  .screen-title{font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--gold)}
+  .playlist-list{display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1}
+  .playlist-item{display:flex;align-items:center;gap:12px;background:var(--groove);border-radius:10px;padding:11px;cursor:pointer;border:1.5px solid transparent;transition:border-color .15s,transform .1s}
+  .playlist-item:hover{border-color:var(--gold);transform:translateX(3px)}
+  .playlist-item img{width:50px;height:50px;border-radius:6px;object-fit:cover;background:#444;flex-shrink:0}
+  .pl-info{flex:1;min-width:0}
+  .pl-name{font-weight:500;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pl-count{font-size:.75rem;color:var(--muted);margin-top:2px}
+  .pl-arrow{color:var(--gold)}
+  .status-msg{color:var(--muted);font-size:.85rem;text-align:center;padding:2rem;animation:pulse 1.5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  .err-msg{color:#e74c3c;font-size:.82rem;background:#2a1010;border-radius:8px;padding:.75rem;text-align:center}
+  #screen-setup{padding:1.25rem;gap:1.25rem;align-items:stretch}
+  .chosen-pl{background:var(--groove);border-radius:12px;padding:1rem;display:flex;align-items:center;gap:12px}
+  .chosen-pl img{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#444;flex-shrink:0}
+  .cp-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+  .cp-name{font-weight:500;font-size:.95rem;margin-top:2px}
+  .field-label{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.4rem}
+  .team-row{display:flex;gap:10px}
+  .team-row input{flex:1;background:var(--groove);border:1.5px solid #444;border-radius:10px;padding:12px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:.92rem;outline:none;transition:border-color .15s}
+  .team-row input:focus{border-color:var(--gold)}
+  .num-row{display:flex;align-items:center;gap:12px;background:var(--groove);border-radius:10px;padding:13px}
+  .num-row label{flex:1;font-size:.88rem}
+  .num-row input{width:62px;background:var(--vinyl);border:1.5px solid #555;border-radius:8px;padding:8px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:1rem;text-align:center;outline:none}
+  .num-row input:focus{border-color:var(--gold)}
+  .num-row span{font-size:.82rem;color:var(--muted)}
+  .start-btn{background:var(--gold);color:var(--vinyl);border:none;border-radius:50px;padding:16px;font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;cursor:pointer;margin-top:auto;transition:background .15s,transform .1s}
+  .start-btn:hover{background:var(--gold-light);transform:scale(1.02)}
+  .stepper{display:flex;align-items:center;gap:0;border:1.5px solid #555;border-radius:10px;overflow:hidden}
+  .stepper button{background:var(--groove);border:none;color:var(--cream);font-size:1.2rem;width:38px;height:38px;cursor:pointer;transition:background .15s;flex-shrink:0}
+  .stepper button:hover{background:#444}
+  .stepper span{min-width:44px;text-align:center;font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:var(--gold);background:var(--vinyl);height:38px;line-height:38px}
+  .team-names-container{display:flex;flex-direction:column;gap:8px}
+  .team-name-input{width:100%;background:var(--groove);border:1.5px solid #444;border-radius:10px;padding:11px 12px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:.92rem;outline:none;transition:border-color .15s}
+  .team-name-input:focus{border-color:var(--gold)}
+  #screen-game{background:var(--vinyl)}
+  .game-hdr{background:var(--groove);padding:11px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #333;flex-shrink:0}
+  .score-wrap{display:flex;gap:14px;align-items:center}
+  .score-chip{display:flex;flex-direction:column;align-items:center}
+  .sc-lbl{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .sc-num{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;line-height:1}
+  .ca{color:#e74c3c}.cb{color:#3498db}
+  .vs-lbl{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--muted)}
+  .target-lbl{font-size:.7rem;color:var(--muted);text-align:right;line-height:1.4}
+  .target-lbl strong{display:block;font-size:.88rem;color:var(--gold);font-weight:500}
+  .turn-bar{padding:8px 16px;text-align:center;font-size:.78rem;font-weight:500;letter-spacing:.08em;flex-shrink:0}
+  .turn-bar.a{background:var(--gold);color:var(--vinyl)}.turn-bar.b{background:#3498db;color:#fff}
+  .timer-area{display:flex;justify-content:center;padding:1.25rem 1rem .5rem;flex-shrink:0}
+  .timer-ring{position:relative;width:88px;height:88px}
+  .timer-ring svg{transform:rotate(-90deg)}
+  .r-bg{stroke:#333}.r-fill{stroke:var(--gold);stroke-dasharray:251.2;stroke-dashoffset:0;transition:stroke-dashoffset .95s linear,stroke .3s}
+  .r-fill.urgent{stroke:var(--red)}
+  .t-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:700}
+  .song-card{background:var(--groove);border-radius:14px;margin:.6rem 1rem;padding:1rem 1.1rem;border:1px solid #333;flex-shrink:0}
+  .track-row{display:flex;align-items:center;gap:12px;margin-bottom:.9rem}
+  .track-art{width:54px;height:54px;border-radius:8px;object-fit:cover;background:#333;flex-shrink:0}
+  .now-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 1s ease-in-out infinite;margin-right:4px;vertical-align:middle}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+  .now-lbl{font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)}
+  .track-title{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;line-height:1.2;margin-top:3px}
+  .track-by{font-size:.78rem;color:var(--muted);margin-top:2px}
+  .checks{display:flex;flex-direction:column;gap:7px}
+  .chk{display:flex;align-items:center;gap:10px;background:var(--vinyl);border-radius:10px;padding:9px 11px;cursor:pointer;border:1.5px solid transparent;transition:border-color .15s,background .15s;user-select:none}
+  .chk:hover{border-color:#555}.chk.on{background:#172817;border-color:var(--green)}
+  .chk-box{width:21px;height:21px;border-radius:6px;border:1.5px solid #555;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,border-color .15s}
+  .chk.on .chk-box{background:var(--green);border-color:var(--green)}
+  .chk-icon{display:none}.chk.on .chk-icon{display:block}
+  .chk-lbl{font-size:.78rem;color:var(--muted);flex:1}
+  .chk-val{font-size:.82rem;font-weight:500;flex:2;text-align:right;padding-left:4px}
+  .pt-tag{background:#222;border-radius:5px;padding:2px 6px;font-size:.68rem;color:var(--gold);flex-shrink:0}
+  .actions{display:flex;gap:10px;margin:.6rem 1rem 1rem;flex-shrink:0}
+  .skip-btn{flex:1;background:none;border:1.5px solid #444;border-radius:10px;color:var(--muted);padding:12px;font-family:'DM Sans',sans-serif;font-size:.88rem;cursor:pointer;transition:border-color .15s,color .15s}
+  .skip-btn:hover{border-color:#777;color:var(--cream)}
+  .skip-btn:disabled{opacity:.35;cursor:default;border-color:#444;color:var(--muted)}
+  .next-btn{flex:2;background:var(--gold);border:none;border-radius:10px;color:var(--vinyl);padding:12px;font-family:'DM Sans',sans-serif;font-size:.88rem;font-weight:500;cursor:pointer;transition:background .15s,opacity .15s}
+  .next-btn:hover:not(:disabled){background:var(--gold-light)}
+  .next-btn:disabled{opacity:.35;cursor:default}
+  .playback-status{font-size:.72rem;color:var(--muted);text-align:center;padding:.25rem 1rem;flex-shrink:0;min-height:1.2rem}
+  .pause-btn{flex:1;background:none;border:1.5px solid var(--gold);border-radius:10px;color:var(--gold);padding:11px;font-family:'DM Sans',sans-serif;font-size:.88rem;cursor:pointer;transition:background .15s,color .15s}
+  .pause-btn:hover{background:var(--gold);color:var(--vinyl)}
+  .pause-btn.paused{background:var(--gold);color:var(--vinyl)}
+  .stop-btn{flex:1;background:none;border:1.5px solid #c0392b;border-radius:10px;color:#c0392b;padding:11px;font-family:'DM Sans',sans-serif;font-size:.88rem;cursor:pointer;transition:background .15s,color .15s}
+  .stop-btn:hover{background:#c0392b;color:#fff}
+  #screen-roundend{padding:2rem 1.5rem;align-items:center;justify-content:center;gap:1.5rem;text-align:center}
+  .re-title{font-family:'Playfair Display',serif;font-size:2rem;color:var(--gold)}
+  .re-pts{font-size:3.5rem;font-weight:300}.re-pts span{color:var(--gold);font-weight:700}
+  .re-summary{font-size:.88rem;color:var(--muted)}
+  .scoreboard{background:var(--groove);border-radius:14px;padding:1.2rem;width:100%}
+  .sb-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333}
+  .sb-row:last-child{border-bottom:none}
+  .sb-team{font-weight:500}.sb-pts{font-family:'Playfair Display',serif;font-size:1.4rem}
+  .sb-pts.lead{color:var(--gold)}
+  .continue-btn{background:var(--gold);color:var(--vinyl);border:none;border-radius:50px;padding:14px 32px;font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;cursor:pointer;width:100%;transition:background .15s}
+  .continue-btn:hover{background:var(--gold-light)}
+  #screen-winner{padding:2rem 1.5rem;align-items:center;justify-content:center;gap:1.5rem;text-align:center}
+  .trophy{font-size:5rem}
+  .win-title{font-family:'Playfair Display',serif;font-size:2.5rem;color:var(--gold)}
+  .win-name{font-family:'Playfair Display',serif;font-size:3rem;font-weight:900}
+  .win-score{font-size:.92rem;color:var(--muted)}
+  .again-btn{background:none;border:1.5px solid var(--gold);color:var(--gold);border-radius:50px;padding:14px 32px;font-family:'DM Sans',sans-serif;font-size:1rem;cursor:pointer;width:100%;transition:background .15s,color .15s}
+  .again-btn:hover{background:var(--gold);color:var(--vinyl)}
+  .admin-link-btn{background:none;border:none;color:#555;font-size:.75rem;cursor:pointer;padding:.25rem;letter-spacing:.05em;margin-top:-.5rem}
+  .admin-link-btn:hover{color:var(--muted)}
+  .admin-screen{display:none;flex-direction:column;flex:1;background:var(--vinyl);padding:1.25rem;gap:1rem;overflow-y:auto}
+  .admin-screen.active{display:flex}
+  .admin-hdr{display:flex;align-items:center;gap:10px;padding-bottom:.5rem;border-bottom:1px solid #333;flex-shrink:0}
+  .admin-title{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold)}
+  .admin-section{background:var(--groove);border-radius:12px;padding:1rem}
+  .admin-section-title{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.75rem}
+  .admin-song-row{display:flex;align-items:center;gap:8px;padding:.6rem 0;border-bottom:1px solid #333;font-size:.82rem}
+  .admin-song-row:last-child{border-bottom:none}
+  .admin-badge{font-size:.65rem;padding:2px 7px;border-radius:20px;font-weight:500;flex-shrink:0}
+  .badge-new{background:#1a3a1a;color:#4caf50;border:1px solid #4caf50}
+  .badge-removed{background:#2a1010;color:#e74c3c;border:1px solid #e74c3c}
+  .badge-pending{background:#2a2010;color:var(--gold);border:1px solid var(--gold)}
+  .badge-approved{background:#1a1a2a;color:#3498db;border:1px solid #3498db}
+  .admin-input{flex:1;background:var(--vinyl);border:1.5px solid #444;border-radius:8px;padding:7px 10px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none;min-width:0}
+  .admin-input:focus{border-color:var(--gold)}
+  .admin-action-btn{background:var(--gold);border:none;border-radius:8px;padding:7px 12px;color:var(--vinyl);font-size:.78rem;font-weight:500;cursor:pointer;flex-shrink:0;white-space:nowrap}
+  .admin-action-btn:hover{background:var(--gold-light)}
+  .admin-action-btn.red{background:#c0392b;color:#fff}
+  .admin-action-btn.red:hover{background:#e74c3c}
+  .admin-action-btn.grey{background:#444;color:var(--cream)}
+  .admin-status{font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem;animation:pulse 1.5s ease-in-out infinite}
+  .admin-song-info{flex:1;min-width:0}
+  .admin-song-title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .admin-song-artist{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stats-hdr{display:flex;align-items:center;padding:1.25rem 1.25rem .5rem;flex-shrink:0}
+  .stats-content{display:flex;flex-direction:column;gap:1rem;padding:0 1rem 1rem;overflow-y:auto;flex:1}
+  .stats-team-card{background:var(--groove);border-radius:14px;padding:1.1rem;border:1px solid #333}
+  .stats-team-name{font-family:'Playfair Display',serif;font-size:1.3rem;margin-bottom:.75rem;padding-bottom:.6rem;border-bottom:1px solid #333}
+  .stats-team-name.a{color:#e74c3c}.stats-team-name.b{color:#3498db}
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stat-cell{background:var(--vinyl);border-radius:10px;padding:.7rem .9rem}
+  .stat-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+  .stat-value{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;line-height:1.2;margin-top:2px}
+  .stat-value.gold{color:var(--gold)}
+  .stat-pct{font-size:.72rem;color:var(--muted);margin-top:1px}
+  .stats-total-row{display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid #333;font-size:.88rem}
+  .stats-total-row:last-child{border-bottom:none}
+  .stats-total-row span:last-child{font-weight:500;color:var(--gold)}
+  .stats-section-label{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.4rem;margin-top:.25rem}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active">
+  <div class="logo-vinyl"></div>
+  <div class="logo-title">Under the Covers</div>
+  <div class="logo-sub">The Cover Song Trivia Game</div>
+  <div class="instructions">
+    <p><strong>Instructions:</strong></p>
+    <p>Every song is a cover song.</p>
+    <p>There are three points awarded for every song: title of the song, cover artist, original artist.</p>
+    <p>Open outcry format.</p>
+    <p>That's it, enjoy!</p>
+  </div>
+  <button class="spotify-btn" onclick="loginSpotify()">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+    Connect with Spotify
+  </button>
+
+  <p class="hint">Spotify Premium required for audio playback.<br>Connects directly to the Under the Covers playlist.</p>
+  <button class="admin-link-btn" id="admin-link-btn" onclick="showAdminLogin()">⚙ Admin</button>
+
+</div>
+
+
+
+<!-- SETUP -->
+<div id="screen-setup" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" id="setup-back" onclick="showScreen('login')">&#8592;</button>
+    <div class="screen-title">Game Setup</div>
+  </div>
+  <div>
+    <div class="field-label">Number of Teams / Players</div>
+    <div class="num-row">
+      <label>How many teams?</label>
+      <div class="stepper">
+        <button onclick="changeTeamCount(-1)">−</button>
+        <span id="team-count-display">2</span>
+        <button onclick="changeTeamCount(1)">+</button>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="field-label">Team Names</div>
+    <div id="team-names-container" class="team-names-container"></div>
+  </div>
+  <div>
+    <div class="field-label">Winning Score</div>
+    <div class="num-row">
+      <label>First to reach</label>
+      <div class="stepper">
+        <button onclick="adjustNum('win-pts',-5)">−</button>
+        <span id="win-pts-display">25</span>
+        <button onclick="adjustNum('win-pts',5)">+</button>
+      </div>
+      <input type="hidden" id="win-pts" value="25">
+      <span>pts</span>
+    </div>
+  </div>
+  <div>
+    <div class="field-label">Round Timer</div>
+    <div class="num-row">
+      <label>Seconds per round</label>
+      <div class="stepper">
+        <button onclick="adjustNum('round-secs',-5)">−</button>
+        <span id="round-secs-display">180</span>
+        <button onclick="adjustNum('round-secs',5)">+</button>
+      </div>
+      <input type="hidden" id="round-secs" value="180">
+      <span>sec</span>
+    </div>
+  </div>
+  <button class="start-btn" onclick="startGame()">Start Game &#9654;</button>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <div class="game-hdr">
+    <div id="score-wrap" class="score-wrap"></div>
+    <div class="target-lbl">First to<strong id="hdr-target">25</strong></div>
+  </div>
+  <div id="turn-bar" class="turn-bar a">Team A's Turn</div>
+  <div class="timer-area">
+    <div class="timer-ring">
+      <svg width="88" height="88" viewBox="0 0 88 88">
+        <circle class="r-bg" cx="44" cy="44" r="39" stroke-width="6" fill="none"/>
+        <circle class="r-fill" id="r-fill" cx="44" cy="44" r="39" stroke-width="6" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="t-num" id="t-num">180</div>
+    </div>
+  </div>
+  <div class="song-card">
+    <div class="track-row">
+      <div id="s-art-wrap" class="track-art" style="display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0">🎵</div>
+      <div>
+        <div class="now-lbl"><span class="now-dot"></span>Now Playing</div>
+        <div class="track-title" id="s-name">Loading...</div>
+        <div class="track-by" id="s-by"></div>
+      </div>
+    </div>
+    <div class="checks">
+      <div class="chk" id="chk-title" onclick="toggle('title')">
+        <div class="chk-box"><svg class="chk-icon" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <span class="chk-lbl">Song title</span><span class="chk-val" id="ans-title">—</span><span class="pt-tag">+1</span>
+      </div>
+      <div class="chk" id="chk-cover" onclick="toggle('cover')">
+        <div class="chk-box"><svg class="chk-icon" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <span class="chk-lbl">Cover artist</span><span class="chk-val" id="ans-cover">—</span><span class="pt-tag">+1</span>
+      </div>
+      <div class="chk" id="chk-original" onclick="toggle('original')">
+        <div class="chk-box"><svg class="chk-icon" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <span class="chk-lbl">Original artist</span><span class="chk-val" id="ans-original">—</span><span class="pt-tag">+1</span>
+      </div>
+    </div>
+  </div>
+  <div id="playback-status" class="playback-status"></div>
+  <div class="actions">
+    <button class="skip-btn" id="prev-btn" onclick="prevSong()" disabled>&#9664; Prev</button>
+    <button class="next-btn" onclick="nextSong()">Next Song &#9654;</button>
+  </div>
+  <div class="actions" style="margin-top:0">
+    <button class="pause-btn" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
+    <button class="stop-btn" onclick="confirmStop()">&#9632; Stop Game</button>
+  </div>
+</div>
+
+<!-- ROUND END -->
+<div id="screen-roundend" class="screen">
+  <div class="re-title" id="re-title">Round Over!</div>
+  <div class="re-pts">+<span id="re-pts">0</span> pts</div>
+  <div class="re-summary" id="re-summary"></div>
+  <div id="re-songs" style="width:100%;display:none">
+    <div id="re-songs-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+  <div class="scoreboard" id="re-board"></div>
+  <button class="continue-btn" id="next-turn-btn" onclick="nextTurn()">Next Team's Turn &#9654;</button>
+  <div style="display:flex;gap:.75rem;margin-top:.75rem">
+    <button class="again-btn" style="border-color:#888;color:#888;font-size:.82rem;padding:10px;flex:1" onclick="viewStats('roundend')">View Stats</button>
+    <button class="again-btn" style="border-color:#c0392b;color:#c0392b;font-size:.82rem;padding:10px;flex:1" onclick="confirmStop()">&#9632; Stop Game</button>
+  </div>
+</div>
+
+<!-- ELIMINATION -->
+<div id="screen-elimination" class="screen">
+  <div style="padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;gap:1.5rem;text-align:center;flex:1;justify-content:center">
+    <div style="font-size:3rem">🎵</div>
+    <div style="font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--gold)">Round Complete!</div>
+    <div id="elim-message" style="font-size:.95rem;color:var(--cream);line-height:1.6"></div>
+    <div id="elim-eliminated" style="display:none;background:#2a1010;border:1.5px solid #c0392b;border-radius:12px;padding:1rem 1.25rem;width:100%">
+      <div style="font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:#e74c3c;margin-bottom:.5rem">Eliminated</div>
+      <div id="elim-eliminated-names" style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--cream)"></div>
+    </div>
+    <div id="elim-remaining" style="background:var(--groove);border-radius:12px;padding:1rem 1.25rem;width:100%">
+      <div style="font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:.5rem">Still Playing</div>
+      <div id="elim-remaining-names" style="font-size:.9rem;color:var(--cream);line-height:1.8"></div>
+    </div>
+    <button class="continue-btn" id="elim-continue-btn" onclick="continueAfterElimination()">Start Round <span id="elim-round-num">2</span> &#9654;</button>
+  </div>
+</div>
+
+<!-- WINNER -->
+<div id="screen-winner" class="screen">
+  <div class="trophy">&#127942;</div>
+  <div class="win-title">Winner!</div>
+  <div class="win-name" id="w-name"></div>
+  <div class="win-score" id="w-score"></div>
+  <button class="again-btn" onclick="playAgain()">Play Again</button>
+  <button class="again-btn" style="margin-top:.5rem;border-color:#3498db;color:#3498db" onclick="viewStats('winner')">View Full Stats</button>
+</div>
+
+<!-- STATS -->
+<div id="screen-stats" class="screen">
+  <div class="stats-hdr">
+    <div class="screen-title" style="color:var(--gold)">Game Stats</div>
+  </div>
+  <div id="stats-content" class="stats-content"></div>
+  <div id="stats-footer" style="display:flex;flex-direction:column;gap:.5rem;padding:0 1rem 1.25rem"></div>
+</div>
+
+<!-- ADMIN LOGIN -->
+<div id="screen-admin-login" class="screen" style="align-items:center;justify-content:center;padding:2rem;gap:1.5rem">
+  <div style="font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--gold)">Admin Panel</div>
+  <div id="admin-spotify-warning" style="background:#2a2010;border:1.5px solid var(--gold);border-radius:10px;padding:.85rem 1rem;font-size:.82rem;color:var(--cream);line-height:1.5;text-align:center;width:100%;display:none">
+    ⚠️ Connect with Spotify first so the sync can access your playlist.
+  </div>
+  <input type="password" id="admin-pw-input" placeholder="Enter password" style="width:100%;background:var(--groove);border:1.5px solid #444;border-radius:10px;padding:13px;color:var(--cream);font-family:'DM Sans',sans-serif;font-size:1rem;outline:none;text-align:center" onkeydown="if(event.key==='Enter')checkAdminPw()">
+  <button class="continue-btn" onclick="checkAdminPw()">Enter</button>
+  <button class="back-btn" style="font-size:.85rem;color:var(--muted)" onclick="showScreen('login')">&#8592; Back</button>
+  <div id="admin-pw-error" style="color:#e74c3c;font-size:.82rem;display:none">Incorrect password</div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="screen-admin" class="admin-screen">
+  <div class="admin-hdr">
+    <button class="back-btn" onclick="showScreen('login')">&#8592;</button>
+    <div class="admin-title">Admin Panel</div>
+    <button class="admin-action-btn" style="margin-left:auto" onclick="loadAdminPanel()">&#8635; Refresh</button>
+  </div>
+  <div id="admin-status" class="admin-status" style="display:none">Loading...</div>
+  <div class="admin-section">
+    <div class="admin-section-title">&#x2795; Add New Song</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">Paste a Spotify track URL or URI to add a song to the game.</div>
+    <div style="display:flex;gap:8px;margin-bottom:.75rem">
+      <input class="admin-input" id="admin-spotify-url" placeholder="Paste Spotify URL or URI..." style="flex:1">
+      <button class="admin-action-btn" onclick="lookupSpotifyTrack()">Look Up</button>
+    </div>
+    <div id="admin-lookup-result" style="display:none;background:var(--vinyl);border-radius:10px;padding:.75rem">
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">Found:</div>
+      <div class="admin-song-row" style="padding:0;border:none">
+        <div class="admin-song-info">
+          <div class="admin-song-title" id="lookup-title"></div>
+          <div class="admin-song-artist" id="lookup-artist"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:.75rem;align-items:center">
+        <input class="admin-input" id="lookup-original" placeholder="Original artist...">
+        <button class="admin-action-btn" onclick="addLookedUpSong()">Add to Game</button>
+      </div>
+    </div>
+    <div id="admin-lookup-error" style="display:none;color:#e74c3c;font-size:.78rem;margin-top:.5rem"></div>
+  </div>
+  <div id="admin-pending-songs" class="admin-section" style="display:none">
+    <div class="admin-section-title">&#x23F3; Pending — Needs Original Artist</div>
+    <div id="admin-pending-list"></div>
+  </div>
+  <div id="admin-approved-songs" class="admin-section">
+    <div class="admin-section-title">&#x2713; Approved Songs (<span id="admin-approved-count">0</span>)</div>
+    <div id="admin-approved-list"></div>
+  </div>
+</div>
+
+</div>
+<script>
+window.onerror=function(msg,src,line){
+  showLoginError('JS Error: '+msg+' (line '+line+')');
+  return false;
+};
+window.onunhandledrejection=function(e){
+  showLoginError('Error: '+(e.reason?.message||String(e.reason)));
+};
+const CLIENT_ID = '274caba37a3d41ef917a10b396e54987';
+const SHEET_ID = '1BFnqxz-wWE_j8CiDO4kV_kN45Sb0YarKJ5HRAYA9QU8';
+// Sheets reads via CSV export, writes via Apps Script
+const SPOTIFY_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
+const ADMIN_PASSWORD = 'utc2024';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_lW3D9rvYKuuM4pNfTE1pz7XMRJxndLp6Jiof4ZEJsJaWbYjrHKTn-7WrIrvtwwN8mQ/exec';
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+
+
+// ── STATE ──
+let token=null,playlists=[],selectedPl=null;
+let tracks=[],idx=0;
+
+// ── TEAM STATE ──
+let teamCount=2;
+let teamNames=[];        // ['Team A','Team B',...]
+let teamScores=[];       // [0,0,...]
+let currentTeamIdx=0;
+let activeTeamIndices=[];
+let winPts=25,roundSecs=180,timeLeft=180;
+let timer=null,graceTimer=null;
+let roundNumber=1;
+let teamsPlayedThisRound=0;
+let winTriggeredBy=-1;
+let gameOver=false;
+let winnerName='';
+
+// ── ROUND STATE ──
+let active=false;
+let paused=false;
+let chks={title:false,cover:false,original:false};
+let roundPts=0;
+let currentSongAttemptedBy=new Set(); // tracks which teams have attempted the current song (for retry chain)
+let songElapsedSecs=0; // seconds elapsed on the current song (resets on each new song)
+
+// ── SONG STATE ──
+let currentSong=null;    // {t,c,o,uri} currently displayed
+let prevSongData=null;   // song before current (with saved checkboxes)
+let nextSongData=null;   // queued next song when Prev was pressed (with saved checkboxes)
+let playedUris=new Set(); // URIs heard this game (never replayed)
+let songHistory=[];      // all songs heard: {title,cover,original,uri,team,pts}
+let roundSongHistory=[]; // scored songs since last full-round reset
+
+// ── RETRY QUEUES ──
+// retryQueues[teamIdx] = array of {song, attemptedBy: Set of teamIdx}
+// A song moves forward one team at a time until someone scores or all teams fail.
+let retryQueues=[];      // initialised in startGame/playAgain
+
+// ── MUSIC PROVIDER ──
+// musicProvider is the single interface the game uses for all playback.
+// Swap SpotifyProvider for AppleMusicProvider (etc.) here when ready.
+let musicProvider = null;
+const PROVIDER_TYPE = 'spotify'; // hardcoded for MVP
+
+// Promise that resolves when the Spotify SDK script is ready
+const spotifySDKReady = new Promise(resolve => {
+  window.onSpotifyWebPlaybackSDKReady = resolve;
+});
+
+// ── SpotifyProvider ──
+// Implements: prepare(token), activate(), init(token), play(uri), pause(), resume(), disconnect()
+// Game logic never calls Spotify directly — always goes through musicProvider.
+//
+// Mobile note: phone browsers only allow audio that starts from a tap. So the
+// player is built early (prepare, right after login), unlocked synchronously
+// by the Start tap (activate), and only then connected (init).
+class SpotifyProvider {
+  constructor() {
+    this._player = null;
+    this._deviceId = null;
+    this._token = null;
+    this._pending = null; // {resolve, reject} while a connect is in flight
+  }
+
+  // Builds the player and wires its listeners once. No network, no audio.
+  // Requires the SDK script to be loaded (spotifySDKReady).
+  prepare(token) {
+    this._token = token;
+    if (this._player) return;
+
+    const player = new Spotify.Player({
+      name: 'Under the Covers',
+      getOAuthToken: cb => cb(this._token),
+      volume: 0.8
+    });
+
+    player.addListener('ready', async ({ device_id }) => {
+      this._deviceId = device_id;
+      setStatus('🎵 Connecting player...');
+      // Give Spotify's backend ~750ms to register the browser device
+      // before the first play command is issued via the REST API
+      await new Promise(res => setTimeout(res, 750));
+      setStatus('🎵 Ready to play');
+      this._settle(null);
+    });
+
+    player.addListener('not_ready', () => {
+      this._deviceId = null;
+      setStatus('⚠️ Player went offline');
+    });
+
+    player.addListener('initialization_error', ({ message }) => {
+      // Fatal — SDK cannot start at all
+      setStatus('Player error: ' + message);
+      this._settle(new Error(message));
+    });
+
+    player.addListener('authentication_error', () => {
+      // Non-fatal in Development Mode — Spotify's internal web-playback scope
+      // check returns 403 even when correctly configured. Player still reaches
+      // 'ready' with a valid device_id so we swallow this and continue.
+      setStatus('');
+    });
+
+    player.addListener('account_error', ({ message }) => {
+      // Fatal — no Premium account
+      setStatus('⚠️ Spotify Premium required for playback');
+      this._settle(new Error(message));
+    });
+
+    player.addListener('playback_error', ({ message }) => {
+      setStatus('Playback error: ' + message);
+    });
+
+    this._player = player;
+  }
+
+  // Resolves or rejects the in-flight init() promise, if any
+  _settle(err) {
+    if (!this._pending) return;
+    const p = this._pending;
+    this._pending = null;
+    if (err) p.reject(err); else p.resolve();
+  }
+
+  // Unlocks audio on mobile browsers. Must run synchronously inside a
+  // tap handler, before any await. Harmless on desktop.
+  activate() {
+    if (!this._player) return;
+    try {
+      const r = this._player.activateElement();
+      if (r && r.catch) r.catch(() => {});
+    } catch(e) {}
+  }
+
+  // Connects the (already prepared) player. Safe to call more than once.
+  async init(token) {
+    this._token = token;
+    await spotifySDKReady;
+    this.prepare(token);
+    if (this._deviceId) return; // already connected
+
+    return new Promise((resolve, reject) => {
+      this._pending = { resolve, reject };
+      this._player.connect().then(success => {
+        if (!success) this._settle(new Error('Player failed to connect'));
+      });
+    });
+  }
+
+  async play(uri) {
+    if (!this._deviceId) { setStatus('⚠️ Player not ready'); return; }
+    try {
+      const r = await fetch(
+        'https://api.spotify.com/v1/me/player/play?device_id=' + this._deviceId,
+        {
+          method: 'PUT',
+          headers: { Authorization: 'Bearer ' + this._token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uris: [uri] })
+        }
+      );
+      if (r.status === 403) setStatus('⚠️ Spotify Premium required');
+      else setStatus('');
+    } catch(e) { setStatus('Playback error: ' + e.message); }
+  }
+
+  async pause() {
+    if (!this._player) return;
+    try {
+      await this._player.pause();
+      await new Promise(res => setTimeout(res, 150));
+    } catch(e) {}
+  }
+
+  async resume() {
+    if (!this._player) return;
+    try { await this._player.resume(); } catch(e) {}
+  }
+
+  disconnect() {
+    if (this._player) {
+      try { this._player.disconnect(); } catch(e) {}
+      this._player = null;
+      this._deviceId = null;
+    }
+  }
+}
+
+// ── PROVIDER FACTORY ──
+// MVP: always returns SpotifyProvider.
+// Future: check saved preference and return AppleMusicProvider, AmazonProvider, etc.
+// One provider instance per page, so the player unlocked by the Start tap is
+// the same one that plays the songs.
+function getMusicProvider(type) {
+  if (!musicProvider) {
+    if (type === 'spotify') musicProvider = new SpotifyProvider();
+    else throw new Error('Unknown music provider: ' + type);
+  }
+  return musicProvider;
+}
+
+async function initMusicProvider(type, token) {
+  const provider = getMusicProvider(type);
+  await provider.init(token);
+  return provider;
+}
+
+// Legacy alias kept so nothing inside game logic needs to change
+let deviceId = null; // still used as a truthy guard in a few places — kept for safety
+let usingSpotify = true;
+
+const $=id=>document.getElementById(id);
+function showScreen(id){
+  document.querySelectorAll('.screen,.admin-screen').forEach(s=>s.classList.remove('active'));
+  const el=$('screen-'+id)||$('screen-admin-login');
+  if(id==='admin'){
+    $('screen-admin').classList.add('active');
+  } else if(id==='admin-login'){
+    $('screen-admin-login').classList.add('active');
+  } else {
+    if(el)el.classList.add('active');
+  }
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}}
+
+// ── AUTH ──
+function rnd(){const a=new Uint8Array(32);crypto.getRandomValues(a);return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')}
+async function challenge(v){const d=new TextEncoder().encode(v),h=await crypto.subtle.digest('SHA-256',d);return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'')}
+
+async function loginSpotify(){
+  const v=rnd(),c=await challenge(v);
+  sessionStorage.setItem('pkce_v',v);
+  const redirectUri=window.location.origin+window.location.pathname;
+  const url='https://accounts.spotify.com/authorize?'+new URLSearchParams({
+    client_id:CLIENT_ID,response_type:'code',redirect_uri:redirectUri,
+    scope:'user-read-private playlist-read-private playlist-read-collaborative user-read-playback-state user-modify-playback-state streaming',
+    code_challenge_method:'S256',code_challenge:c
+  });
+  location.href=url;
+}
+
+async function handleCallback(code){
+  const v=sessionStorage.getItem('pkce_v');
+  const redirectUri=window.location.origin+window.location.pathname;
+  if(!v){showLoginError('Session expired. Please try connecting again.');return false}
+  try{
+    const r=await fetch('https://accounts.spotify.com/api/token',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:CLIENT_ID,code_verifier:v})
+    });
+    const d=await r.json();
+    if(d.access_token){token=d.access_token;sessionStorage.removeItem('pkce_v');return true}
+    showLoginError('Login failed: '+(d.error_description||d.error||'Unknown error'));
+    return false;
+  }catch(e){showLoginError('Connection error. Please try again.');return false}
+}
+
+function showLoginError(msg){
+  let el=document.getElementById('login-err-msg');
+  if(!el){
+    el=document.createElement('div');
+    el.id='login-err-msg';
+    el.style.cssText='color:#e74c3c;font-size:.82rem;background:#2a1010;border-radius:8px;padding:.75rem;text-align:center;width:100%';
+    document.getElementById('screen-login').appendChild(el);
+  }
+  el.textContent=msg;
+  el.style.display='block';
+}
+
+const UTC_PLAYLIST_ID = '1hqa7Q5PMhLp2RuSOgu4xZ';
+
+async function loadPlaylists(){
+  usingSpotify=true;
+  $('setup-back').onclick=()=>showScreen('login');
+  showScreen('setup');
+  renderTeamInputs();
+  // Build the player now so the Start tap can unlock audio on mobile
+  spotifySDKReady.then(()=>getMusicProvider(PROVIDER_TYPE).prepare(token));
+}
+
+
+// ── PLAYBACK ──
+// All playback calls go through musicProvider — never directly to Spotify API.
+// SpotifyProvider uses the Web Playback SDK: the browser tab IS the player.
+// To add Apple Music or Amazon Music later, implement the same interface
+// (init, play, pause, resume, disconnect) and swap in initMusicProvider().
+
+async function initPlayer(){
+  // Connect the music provider (built earlier in loadPlaylists).
+  // Called once at game start.
+  try {
+    musicProvider = await initMusicProvider(PROVIDER_TYPE, token);
+    deviceId = true; // non-null sentinel so legacy guards don't short-circuit
+  } catch(e) {
+    setStatus('Could not start player: ' + e.message);
+    deviceId = null;
+  }
+}
+
+async function playTrack(uri){
+  if(!uri||!musicProvider)return;
+  await musicProvider.play(uri);
+}
+
+async function pauseSpotify(){
+  if(!musicProvider)return;
+  await musicProvider.pause();
+}
+function setStatus(m){$('playback-status').textContent=m}
+
+// ── GAME ──
+
+async function startGame(){
+  // Mobile: unlock audio while still inside the Start tap.
+  // Must stay above the first await in this function.
+  if(musicProvider)musicProvider.activate();
+
+  // Collect team names
+  teamNames=[];
+  for(let i=0;i<teamCount;i++){
+    const inp=document.getElementById('team-name-'+i);
+    teamNames.push(inp&&inp.value.trim()?inp.value.trim():'Team '+(i+1));
+  }
+  winPts=parseInt($('win-pts').value)||25;
+  roundSecs=Math.max(30,parseInt($('round-secs').value)||180);
+
+  // Init scores and round tracking
+  teamScores=teamNames.map(()=>0);
+  activeTeamIndices=teamNames.map((_,i)=>i);
+  currentTeamIdx=0;
+  roundNumber=1;
+  teamsPlayedThisRound=0;
+  winTriggeredBy=-1;
+  gameOver=false;
+  winnerName='';
+
+  // Init song state
+  playedUris=new Set();
+  songHistory=[];
+  roundSongHistory=[];
+  currentSong=null;
+  prevSongData=null;
+  retryQueues=teamNames.map(()=>[]);
+
+  // Show a loading state on setup page while we prepare
+  const startBtn=document.querySelector('.start-btn');
+  if(startBtn){startBtn.textContent='Loading...';startBtn.disabled=true;}
+
+  try{
+    const sheetSongs=await fetchSheet();
+    if(sheetSongs&&sheetSongs.length>0){
+      const seen=new Set();
+      tracks=sheetSongs
+        .filter(s=>s.status==='approved'&&s.uri&&s.original)
+        .map(s=>({t:s.title,c:s.cover,o:s.original,uri:s.uri}))
+        .filter(s=>{if(seen.has(s.uri))return false;seen.add(s.uri);return true;});
+    } else {
+      throw new Error('Empty sheet');
+    }
+  }catch(e){
+    console.warn('Sheet load failed:',e.message);
+    tracks=[];
+  }
+
+  shuffle(tracks);
+  idx=0;
+  await initPlayer();
+
+  // Everything ready — now switch to game screen
+  $('hdr-target').textContent=winPts;
+  renderScoreHeader();
+  showScreen('game');
+
+  if(startBtn){startBtn.textContent='Start Game ►';startBtn.disabled=false;}
+  await beginRound();
+}
+
+function renderScoreHeader(){
+  const wrap=$('score-wrap');
+  if(!wrap)return;
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
+  wrap.innerHTML=teamNames.map((name,i)=>
+    (i>0?'<div class="vs-lbl">·</div>':'')+
+    '<div class="score-chip">'+
+    '<div class="sc-lbl">'+name+'</div>'+
+    '<div class="sc-num" style="color:'+colors[i%colors.length]+'" id="pts-'+i+'">'+teamScores[i]+'</div>'+
+    '</div>'
+  ).join('');
+}
+
+async function beginRound(){
+  active=true;
+  paused=false;
+  roundPts=0;
+  chks={title:false,cover:false,original:false};
+  currentSong=null;
+  prevSongData=null;
+  nextSongData=null;
+  currentSongAttemptedBy=new Set();
+  songElapsedSecs=0;
+
+  // Next button starts disabled each round
+  const nb=document.querySelector('.next-btn');
+  if(nb)nb.disabled=true;
+
+  // Update turn bar
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
+  const bar=$('turn-bar');
+  const pos=activeTeamIndices.indexOf(currentTeamIdx);
+  if(teamNames.length===1){
+    bar.textContent=teamNames[currentTeamIdx]+"'s Turn";
+  } else {
+    const scorekeeperIdx=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+    bar.textContent=teamNames[currentTeamIdx]+"'s Turn — Scorekeeper: "+teamNames[scorekeeperIdx];
+  }
+  bar.style.background='';bar.style.color='';
+
+  // Update score display
+  teamNames.forEach((_,i)=>{const el=$('pts-'+i);if(el)el.textContent=teamScores[i];});
+
+  // Clear song card
+  $('s-name').textContent='Loading...';
+  $('s-by').textContent='';
+  $('s-art-wrap').textContent='🎵';
+  $('ans-title').textContent='—';
+  $('ans-cover').textContent='—';
+  $('ans-original').textContent='—';
+  ['title','cover','original'].forEach(k=>{const el=$('chk-'+k);if(el)el.className='chk';});
+
+  // Reset prev button
+  const pb=$('prev-btn');if(pb)pb.disabled=true;
+
+  loadSong();
+  startTimer();
+}
+
+// ── SONG LOADING ──
+
+function songAlreadyPlayed(uri,title){
+  // Check playedUris Set (primary source)
+  if(uri&&playedUris.has(uri))return true;
+  // Double-check songHistory as safety net
+  if(uri&&songHistory.some(s=>s.uri===uri))return true;
+  if(title&&songHistory.some(s=>s.title===title))return true;
+  return false;
+}
+
+function loadSong(){
+  // Serve queued retry songs (FIFO) before any new songs
+  const myQueue=retryQueues[currentTeamIdx];
+  if(myQueue.length>0){
+    const entry=myQueue.shift();
+    currentSongAttemptedBy=entry.attemptedBy; // restore history of who has tried this song
+    displaySong(entry.song);
+    return;
+  }
+
+  // No queued songs — pull the next unplayed track
+  while(idx<tracks.length && songAlreadyPlayed(tracks[idx].uri,tracks[idx].t)){idx++;}
+  if(idx>=tracks.length){endRound();return;}
+
+  const song=tracks[idx];
+  idx++;
+  if(song.uri)playedUris.add(song.uri);
+  currentSongAttemptedBy=new Set(); // fresh song, no prior attempts
+  displaySong(song);
+}
+
+function displaySong(song,savedChecks){
+  const title=song.t||'';
+  const cover=song.c||'';
+  const original=song.o||'';
+  const uri=song.uri||null;
+
+  currentSong={t:title,c:cover,o:original,uri};
+
+  // Reset per-song elapsed counter and re-evaluate next button
+  songElapsedSecs=0;
+  updateNextBtn();
+
+  // Restore saved checkboxes or reset to zero
+  if(savedChecks){
+    chks={...savedChecks};
+  } else {
+    chks={title:false,cover:false,original:false};
+  }
+  ['title','cover','original'].forEach(k=>{
+    const el=$('chk-'+k);if(el)el.className='chk'+(chks[k]?' on':'');
+  });
+
+  // Prev button enabled only if prevSongData exists and we haven't already gone back
+  const pb=$('prev-btn');
+  if(pb)pb.disabled=prevSongData===null;
+
+  // Clear display, reveal after short delay
+  $('s-name').textContent='Loading...';
+  $('s-by').textContent='';
+  $('s-art-wrap').textContent='🎵';
+  $('ans-title').textContent='—';
+  $('ans-cover').textContent='—';
+  $('ans-original').textContent='—';
+
+  if(uri&&active)playTrack(uri);
+
+  setTimeout(()=>{
+    $('s-name').textContent=title;
+    $('s-by').textContent='by '+cover;
+    $('ans-title').textContent=title;
+    $('ans-cover').textContent=cover;
+    $('ans-original').textContent=original;
+  },800);
+}
+
+// ── RETRY QUEUE LOGIC ──
+
+// Called whenever a song scores 0. Passes it to the next team's queue,
+// or discards it if all active teams have already attempted it.
+function passToNextTeam(song, attemptedBy){
+  const pos=activeTeamIndices.indexOf(currentTeamIdx);
+  const nextTeamIdx=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+
+  // If all active teams have now attempted it, discard
+  const allAttempted=activeTeamIndices.every(i=>attemptedBy.has(i));
+  if(allAttempted)return;
+
+  retryQueues[nextTeamIdx].push({song, attemptedBy});
+}
+
+async function nextSong(){
+  if(!active&&!paused)return;
+  const scoredSong=currentSong?{...currentSong}:null;
+  const scoredChecks={...chks};
+
+  await pauseSpotify();
+  await new Promise(res=>setTimeout(res,300));
+  if(paused)resumeGame();
+
+  if(!scoredSong){loadSong();return;}
+
+  // Score the current song
+  const t=scoredChecks.title?1:0,cv=scoredChecks.cover?1:0,o=scoredChecks.original?1:0;
+  const pts=t+cv+o;
+  recordSong(scoredSong,pts,t,cv,o);
+
+  // If scored 0, pass to next team's retry queue
+  if(pts===0&&scoredSong.uri){
+    const attemptedBy=new Set(currentSongAttemptedBy);
+    attemptedBy.add(currentTeamIdx);
+    passToNextTeam(scoredSong, attemptedBy);
+  }
+
+  if(nextSongData){
+    const queued=nextSongData;
+    nextSongData=null;
+    prevSongData={...scoredSong,savedChecks:scoredChecks};
+    displaySong(queued,queued.savedChecks);
+  } else {
+    prevSongData={...scoredSong,savedChecks:scoredChecks};
+    nextSongData=null;
+    loadSong();
+  }
+}
+
+async function prevSong(){
+  if(!prevSongData)return;
+  await pauseSpotify();
+  await new Promise(res=>setTimeout(res,300));
+
+  // Save current song as queued next (with current checkbox state)
+  nextSongData={...currentSong,savedChecks:{...chks}};
+
+  // Restore previous song
+  const prev=prevSongData;
+  prevSongData=null;
+
+  displaySong(prev,prev.savedChecks);
+
+  // Gray out prev button — can't go back further
+  const pb=$('prev-btn');if(pb)pb.disabled=true;
+}
+
+function recordSong(song,pts,t,cv,o){
+  // Ensure played
+  if(song.uri)playedUris.add(song.uri);
+
+  // Avoid duplicate entries for same song+team
+  const existing=songHistory.find(s=>s.uri===song.uri&&s.team===teamNames[currentTeamIdx]);
+  if(existing){
+    // Update score if pts changed
+    if(pts!==existing.pts){
+      const diff=pts-existing.pts; // calculate diff BEFORE updating existing.pts
+      existing.pts=pts;
+      existing.checks={title:!!t,cover:!!cv,original:!!o};
+      teamScores[currentTeamIdx]+=diff;
+      roundPts+=diff;
+      const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
+      // Check win trigger
+      if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){
+        winTriggeredBy=currentTeamIdx;
+      }
+    }
+    return;
+  }
+
+  // New entry
+  const entry={
+    title:song.t||'',cover:song.c||'',original:song.o||'',
+    uri:song.uri||null,team:teamNames[currentTeamIdx],
+    pts,checks:{title:!!t,cover:!!cv,original:!!o}
+  };
+  songHistory.push(entry);
+  roundSongHistory.push(entry);
+
+  // Update scores
+  teamScores[currentTeamIdx]+=pts;
+  roundPts+=pts;
+  const el=$('pts-'+currentTeamIdx);if(el)el.textContent=teamScores[currentTeamIdx];
+
+  // Check win trigger
+  if(teamScores[currentTeamIdx]>=winPts&&winTriggeredBy===-1){
+    winTriggeredBy=currentTeamIdx;
+  }
+}
+
+// ── TIMER ──
+
+function startTimer(){
+  timeLeft=roundSecs;
+  drawTimer();
+  timer=setInterval(()=>{
+    if(!paused){songElapsedSecs++;}
+    timeLeft--;
+    drawTimer();
+    updateNextBtn();
+    if(timeLeft<=0){
+      stopTimer();
+      pauseSpotify();
+      showGracePeriod();
+    }
+  },1000);
+}
+
+function stopTimer(){
+  clearInterval(timer);timer=null;
+  clearInterval(graceTimer);graceTimer=null;
+}
+
+function drawTimer(){
+  $('t-num').textContent=timeLeft;
+  const C=2*Math.PI*39;
+  $('r-fill').style.strokeDashoffset=C*(1-timeLeft/roundSecs);
+  $('r-fill').className='r-fill'+(timeLeft<=10?' urgent':'');
+}
+
+function showGracePeriod(){
+  active=false;
+  // Disable action buttons, leave checkboxes active
+  document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{if(el)el.disabled=true;});
+  const pb=$('prev-btn');if(pb)pb.disabled=true;
+
+  const bar=$('turn-bar');
+  bar.style.background='#c0392b';bar.style.color='#fff';
+
+  let graceLeft=10;
+  function tick(){
+    if(graceLeft<=0){
+      clearInterval(graceTimer);graceTimer=null;
+      bar.style.background='';bar.style.color='';
+      document.querySelectorAll('.next-btn,.stop-btn,.pause-btn,.skip-btn').forEach(el=>{if(el)el.disabled=false;});
+      endRound();
+      return;
+    }
+    $('t-num').textContent=graceLeft;
+    bar.textContent="Time's Up! Score now: "+graceLeft+"s";
+    graceLeft--;
+  }
+  tick();
+  graceTimer=setInterval(tick,1000);
+}
+
+// ── END OF TURN ──
+
+function endRound(){
+  stopTimer();
+  active=false;
+  pauseSpotify();
+
+  // Score whatever is currently checked (grace period scoring)
+  if(currentSong){
+    const t=chks.title?1:0,cv=chks.cover?1:0,o=chks.original?1:0;
+    const pts=t+cv+o;
+    recordSong(currentSong,pts,t,cv,o);
+    // If scored 0, pass to next team's retry queue
+    if(pts===0&&currentSong.uri){
+      const attemptedBy=new Set(currentSongAttemptedBy);
+      attemptedBy.add(currentTeamIdx);
+      passToNextTeam(currentSong, attemptedBy);
+    }
+  }
+
+  // Increment now so we can check if round is complete
+  teamsPlayedThisRound++;
+  const roundComplete=teamsPlayedThisRound>=activeTeamIndices.length;
+
+  if(roundComplete){
+    // Solo win
+    if(teamNames.length===1&&teamScores[0]>=winPts){showWinner();return;}
+
+    // Multi-team: check if leader has hit winPts and leads by 3+
+    if(winTriggeredBy!==-1){
+      const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
+      const topIdx=activeTeamIndices.reduce((a,b)=>teamScores[a]>teamScores[b]?a:b);
+      const maxOther=Math.max(...activeTeamIndices.filter(i=>i!==topIdx).map(i=>teamScores[i]));
+      if(topScore-maxOther>=3){winTriggeredBy=topIdx;showWinner();return;}
+    }
+  }
+
+  viewStats('roundend');
+}
+
+async function nextTurn(){
+  const roundComplete=teamsPlayedThisRound>=activeTeamIndices.length;
+
+  if(roundComplete){
+    roundNumber++;
+    teamsPlayedThisRound=0;
+    roundSongHistory=[];
+
+    // Check eliminations if win was triggered
+    if(winTriggeredBy!==-1){
+      const topScore=Math.max(...activeTeamIndices.map(i=>teamScores[i]));
+      const toElim=activeTeamIndices.filter(i=>topScore-teamScores[i]>3);
+      if(toElim.length>0&&toElim.length<activeTeamIndices.length){
+        activeTeamIndices=activeTeamIndices.filter(i=>!toElim.includes(i));
+        if(activeTeamIndices.length===1){showWinner();return;}
+        showEliminationScreen(toElim);
+        winTriggeredBy=-1;
+        return;
+      }
+    }
+  }
+
+  // Advance to next active team
+  const pos=activeTeamIndices.indexOf(currentTeamIdx);
+  currentTeamIdx=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+  showScreen('game');
+  await beginRound();
+}
+
+function showWinner(){
+  gameOver=true;
+  const winIdx=teamScores.indexOf(Math.max(...teamScores));
+  winnerName=teamNames[winIdx];
+  viewStats('winner');
+}
+
+async function playAgain(){
+  teamScores=teamNames.map(()=>0);
+  activeTeamIndices=teamNames.map((_,i)=>i);
+  currentTeamIdx=0;
+  roundNumber=1;
+  teamsPlayedThisRound=0;
+  winTriggeredBy=-1;
+  gameOver=false;
+  winnerName='';
+  playedUris=new Set();
+  songHistory=[];
+  roundSongHistory=[];
+  currentSong=null;
+  prevSongData=null;
+  nextSongData=null;
+  retryQueues=teamNames.map(()=>[]);
+  shuffle(tracks);idx=0;
+  renderScoreHeader();
+  showScreen('game');
+  await beginRound();
+}
+
+// ── STATS ──
+
+let statsContext='roundend';
+function viewStats(ctx){
+  statsContext=ctx||'roundend';
+  showScreen('stats');
+  renderStats();
+}
+
+function renderStats(){
+  const el=$('stats-content');
+  const colors=['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#1abc9c'];
+  let html='';
+
+  // Scoreboard
+  const heading=gameOver&&winnerName?
+    '<div style="font-family:Playfair Display,serif;font-size:1.4rem;color:var(--gold);margin-bottom:.4rem">🏆 '+winnerName+' Wins!</div>':'';
+  const chips=teamNames.map((n,i)=>
+    '<div style="text-align:center">'+
+    '<div style="font-size:.72rem;color:var(--muted)">'+n+'</div>'+
+    '<div style="font-family:Playfair Display,serif;font-size:2rem;font-weight:700;color:'+colors[i%colors.length]+'">'+teamScores[i]+'</div>'+
+    '</div>'
+  ).join('<div style="color:var(--muted);align-self:center;padding:0 4px">·</div>');
+  html+='<div class="stats-team-card" style="text-align:center">'+
+    heading+
+    '<div class="stats-section-label">'+(gameOver?'Final Score':'Current Score')+'</div>'+
+    '<div style="display:flex;justify-content:center;align-items:center;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">'+chips+'</div>'+
+    '</div>';
+
+  // Per-team song tables
+  // Between rounds: songs from roundSongHistory, excluding any still in a retry queue
+  // End of game: all songs from songHistory (retry queues are empty/irrelevant)
+  const source=gameOver?songHistory:roundSongHistory;
+  const queuedUris=gameOver?new Set():new Set(retryQueues.flat().map(e=>e.song.uri).filter(Boolean));
+
+  teamNames.forEach((name,i)=>{
+    const color=colors[i%colors.length];
+    const songs=source.filter(s=>s.team===name&&!queuedUris.has(s.uri));
+    html+='<div class="stats-team-card">';
+    html+='<div class="stats-team-name" style="color:'+color+'">'+name+'</div>';
+    if(songs.length>0){
+      html+='<table style="width:100%;border-collapse:collapse;font-size:.78rem">';
+      html+='<tr style="border-bottom:1px solid #444">'+
+        '<th style="text-align:left;padding:4px 6px;font-size:.68rem;color:var(--muted);font-weight:500">Title</th>'+
+        '<th style="text-align:left;padding:4px 4px;font-size:.68rem;color:var(--muted);font-weight:500">Cover</th>'+
+        '<th style="text-align:left;padding:4px 4px;font-size:.68rem;color:var(--muted);font-weight:500">Original</th>'+
+        '<th style="text-align:right;padding:4px 4px;font-size:.68rem;color:var(--muted);font-weight:500">Pts</th></tr>';
+      songs.forEach(s=>{
+        const ptColor=s.pts>0?'var(--green)':'#666';
+        html+='<tr style="border-bottom:1px solid #2a2a2a">'+
+          '<td style="padding:6px 6px;font-weight:500">'+s.title+'</td>'+
+          '<td style="padding:6px 4px;color:var(--muted);font-size:.72rem">'+s.cover+'</td>'+
+          '<td style="padding:6px 4px;color:var(--muted);font-size:.72rem;font-style:italic">'+s.original+'</td>'+
+          '<td style="padding:6px 4px;text-align:right;color:'+ptColor+';font-family:Playfair Display,serif;font-weight:700">'+(s.pts>0?'+'+s.pts:'—')+'</td>'+
+          '</tr>';
+      });
+      html+='</table>';
+    } else {
+      html+='<div style="font-size:.82rem;color:var(--muted);padding:.5rem 0">No songs this round</div>';
+    }
+    html+='</div>';
+  });
+
+  el.innerHTML=html;
+
+  // Footer buttons
+  const footer=$('stats-footer');
+  if(!gameOver){
+    const pos=activeTeamIndices.indexOf(currentTeamIdx);
+    const nextI=activeTeamIndices[(pos+1)%activeTeamIndices.length];
+    const isRoundEnd=(teamsPlayedThisRound)>=activeTeamIndices.length;
+    const label=isRoundEnd?'Start Round '+(roundNumber+1)+' ►':teamNames[nextI]+"'s Turn ►";
+    footer.innerHTML=
+      '<button class="continue-btn" onclick="nextTurn()">'+label+'</button>'+
+      '<button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px;margin-top:.5rem" onclick="confirmStop()">■ End Game</button>';
+  } else {
+    footer.innerHTML=
+      '<button class="continue-btn" onclick="playAgain()">Play Again ►</button>'+
+      '<button class="again-btn" style="border-color:#888;color:#888;font-size:.85rem;padding:11px;margin-top:.5rem" onclick="goHome()">Back to Home</button>';
+  }
+}
+
+// ── NEXT BUTTON STATE ──
+// Enabled when: 15s elapsed on current song OR at least 1 score box checked.
+// Disabled when: ≤5s remain on the game timer, or neither condition above is met.
+function updateNextBtn(){
+  const btn=document.querySelector('.next-btn');
+  if(!btn)return;
+  const anyChecked=chks.title||chks.cover||chks.original;
+  const fifteenElapsed=songElapsedSecs>=15;
+  const nearEnd=timeLeft<=5&&active; // only suppress during live timer, not grace period
+  btn.disabled=nearEnd||(!anyChecked&&!fifteenElapsed);
+}
+
+// ── CHECKBOX TOGGLE ──
+function toggle(cat){
+  chks[cat]=!chks[cat];
+  const el=$('chk-'+cat);
+  if(el)el.className='chk'+(chks[cat]?' on':'');
+  updateNextBtn();
+}
+
+// ── SETUP HELPERS ──
+function changeTeamCount(delta){
+  teamCount=Math.min(8,Math.max(1,teamCount+delta));
+  $('team-count-display').textContent=teamCount;
+  renderTeamInputs();
+}
+
+function renderTeamInputs(){
+  const container=$('team-names-container');
+  if(!container)return;
+  const defaults=['Team A','Team B','Team C','Team D','Team E','Team F','Team G','Team H'];
+  let html='';
+  for(let i=0;i<teamCount;i++){
+    const prev=document.getElementById('team-name-'+i);
+    const val=prev?prev.value:(defaults[i]||'Team '+(i+1));
+    html+='<input class="team-name-input" id="team-name-'+i+'" type="text" placeholder="'+(defaults[i]||'Team '+(i+1))+'" value="'+val+'" maxlength="20">';
+  }
+  container.innerHTML=html;
+}
+
+function adjustNum(id,delta){
+  const el=$(id);
+  const disp=$(id+'-display');
+  const min=id==='win-pts'?5:30;
+  const max=id==='win-pts'?200:300;
+  const val=Math.min(max,Math.max(min,(parseInt(el.value)||0)+delta));
+  el.value=val;
+  if(disp)disp.textContent=val;
+}
+
+// ── PAUSE / RESUME ──
+function togglePause(){
+  paused=!paused;
+  const btn=$('pause-btn');
+  if(paused){
+    clearInterval(timer);timer=null;
+    pauseSpotify();
+    if(btn){btn.textContent='▶ Resume';btn.classList.add('paused');}
+  } else {
+    resumeGame();
+  }
+}
+
+function resumeGame(){
+  paused=false;
+  timer=setInterval(()=>{
+    songElapsedSecs++;
+    timeLeft--;drawTimer();
+    updateNextBtn();
+    if(timeLeft<=0){stopTimer();pauseSpotify();showGracePeriod();}
+  },1000);
+  if(musicProvider)musicProvider.resume().catch(()=>{});
+  const btn=$('pause-btn');
+  if(btn){btn.textContent='⏸ Pause';btn.classList.remove('paused');}
+}
+
+function confirmStop(){
+  if(confirm('Stop the current game?')){
+    stopTimer();pauseSpotify();gameOver=true;showScreen('login');
+  }
+}
+
+function goHome(){showScreen('login');}
+
+// ── ELIMINATION ──
+function showEliminationScreen(eliminatedIndices){
+  $('elim-message').textContent='The lead is too great - some teams have been eliminated!';
+  $('elim-eliminated').style.display='block';
+  $('elim-eliminated-names').textContent=eliminatedIndices.map(i=>teamNames[i]+' ('+teamScores[i]+' pts)').join(', ');
+  $('elim-remaining-names').innerHTML=activeTeamIndices.map(i=>
+    '<span style="display:block">'+teamNames[i]+': <strong style="color:var(--gold)">'+teamScores[i]+' pts</strong></span>'
+  ).join('');
+  $('elim-round-num').textContent=roundNumber;
+  showScreen('elimination');
+}
+
+async function continueAfterElimination(){
+  currentTeamIdx=activeTeamIndices[0];
+  showScreen('game');
+  await beginRound();
+}
+
+// ── GOOGLE SHEETS SYNC ──
+
+function showAdminLogin(){
+  // If already logged into Spotify, go straight to admin login
+  // If not, remind them to connect first
+  showScreen('admin-login');
+}
+
+function checkAdminPw(){
+  const pw=document.getElementById('admin-pw-input').value;
+  if(pw===ADMIN_PASSWORD){
+    document.getElementById('admin-pw-input').value='';
+    document.getElementById('admin-pw-error').style.display='none';
+    if(!token){
+      document.getElementById('admin-spotify-warning').style.display='block';
+      return;
+    }
+    showScreen('admin');
+    loadAdminPanel();
+  } else {
+    document.getElementById('admin-pw-error').style.display='block';
+  }
+}
+
+async function loadAdminPanel(){
+  const status=$('admin-status');
+  status.style.display='block';
+  status.style.color='';
+  status.style.animation='';
+  status.textContent='Loading song database...';
+  try{
+    const sheetRows=await fetchSheet();
+    renderAdminPanel(sheetRows);
+    status.style.display='none';
+  }catch(e){
+    status.textContent='Error loading sheet: '+e.message;
+  }
+}
+
+
+function renderAdminPanel(sheetRows){
+  const pendingSongs=sheetRows.map((r,i)=>({...r,rowIdx:i+2})).filter(r=>r.status==='pending');
+  const approvedSongs=sheetRows.map((r,i)=>({...r,rowIdx:i+2})).filter(r=>r.status==='approved');
+
+  // Reset lookup UI
+  $('admin-lookup-result').style.display='none';
+  $('admin-lookup-error').style.display='none';
+  $('admin-spotify-url').value='';
+
+  // Render PENDING songs
+  const pendingSection=$('admin-pending-songs');
+  const pendingList=$('admin-pending-list');
+  if(pendingSongs.length>0){
+    pendingSection.style.display='block';
+    pendingList.innerHTML=pendingSongs.map(r=>`
+      <div class="admin-song-row" id="pend-row-${r.rowIdx}">
+        <span class="admin-badge badge-pending">PENDING</span>
+        <div class="admin-song-info">
+          <div class="admin-song-title">${r.title}</div>
+          <div class="admin-song-artist">${r.cover}</div>
+        </div>
+        <input class="admin-input" placeholder="Original artist..." id="pend-orig-${r.rowIdx}" value="${r.original||''}">
+        <button class="admin-action-btn" onclick="approvePendingSong(${r.rowIdx},'${escHtml(r.uri)}','${escHtml(r.title)}','${escHtml(r.cover)}')">Approve</button>
+      </div>`).join('');
+  } else {
+    pendingSection.style.display='none';
+  }
+
+  // Render APPROVED count + list
+  $('admin-approved-count').textContent=approvedSongs.length;
+  // Show total including removed for transparency
+  const removedCount=sheetRows.filter(r=>r.status==='removed').length;
+  if(removedCount>0){
+    const countEl=$('admin-approved-count');
+    countEl.title=removedCount+' removed song(s) hidden';
+  }
+  $('admin-approved-list').innerHTML=approvedSongs.map(r=>`
+    <div class="admin-song-row">
+      <span class="admin-badge badge-approved">OK</span>
+      <div class="admin-song-info">
+        <div class="admin-song-title">${r.title}</div>
+        <div class="admin-song-artist">${r.cover} / <em>${r.original}</em></div>
+      </div>
+      <button class="admin-action-btn red" onclick="confirmRemoveSong(${r.rowIdx},'${escHtml(r.uri)}','${escHtml(r.title)}')">Remove</button>
+    </div>`).join('');
+}
+
+function escHtml(s){return (s||'').replace(/'/g,"\'")}
+
+let lookedUpTrack=null;
+
+async function lookupSpotifyTrack(){
+  const input=$('admin-spotify-url').value.trim();
+  const errEl=$('admin-lookup-error');
+  const resultEl=$('admin-lookup-result');
+  errEl.style.display='none';
+  resultEl.style.display='none';
+  lookedUpTrack=null;
+
+  if(!input){errEl.textContent='Please paste a Spotify URL or URI.';errEl.style.display='block';return;}
+
+  // Extract track ID from URL or URI
+  let trackId=null;
+  if(input.startsWith('spotify:track:')){
+    trackId=input.replace('spotify:track:','');
+  } else {
+    const m=input.match(/track\/([a-zA-Z0-9]+)/);
+    if(m)trackId=m[1];
+  }
+
+  if(!trackId){errEl.textContent='Could not find a track ID. Paste a Spotify track URL or URI.';errEl.style.display='block';return;}
+
+  if(!token){errEl.textContent='Please connect with Spotify first.';errEl.style.display='block';return;}
+
+  try{
+    const r=await fetch('https://api.spotify.com/v1/tracks/'+trackId,{headers:{Authorization:'Bearer '+token}});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    lookedUpTrack={
+      uri:'spotify:track:'+trackId,
+      name:d.name,
+      artist:d.artists?.map(a=>a.name).join(', ')||''
+    };
+    $('lookup-title').textContent=lookedUpTrack.name;
+    $('lookup-artist').textContent='by '+lookedUpTrack.artist;
+    $('lookup-original').value='';
+    resultEl.style.display='block';
+  }catch(e){
+    errEl.textContent='Error: '+e.message;
+    errEl.style.display='block';
+  }
+}
+
+async function addLookedUpSong(){
+  if(!lookedUpTrack){alert('Please look up a track first.');return;}
+  const original=$('lookup-original').value.trim();
+  if(!original){alert('Please enter the original artist.');return;}
+  // Disable button immediately to prevent double-submit
+  const btn=document.querySelector('[onclick="addLookedUpSong()"]');
+  if(btn){btn.disabled=true;btn.textContent='Adding...';}
+  try{
+    await writeToSheet([lookedUpTrack.uri,lookedUpTrack.name,lookedUpTrack.artist,original,'approved']);
+    lookedUpTrack=null;
+    $('admin-spotify-url').value='';
+    $('admin-lookup-result').style.display='none';
+    alert('Added successfully! Refreshing...');
+    loadAdminPanel();
+  }catch(e){
+    alert('Error saving: '+e.message);
+    if(btn){btn.disabled=false;btn.textContent='Add to Game';}
+  }
+}
+
+async function approvePendingSong(rowIdx, uri, title, cover){
+  const origInput=document.getElementById('pend-orig-'+rowIdx);
+  const original=(origInput?origInput.value:'').trim();
+  if(!original){alert('Please enter the original artist first.');return;}
+  try{
+    await updateSheetRow(rowIdx,[uri,title,cover,original,'approved']);
+    document.getElementById('pend-row-'+rowIdx)?.remove();
+    alert('Approved: '+title);
+    loadAdminPanel();
+  }catch(e){alert('Error saving: '+e.message)}
+}
+
+async function confirmRemoveSong(rowIdx, uri, title){
+  if(!confirm('Remove "'+title+'" from the game?'))return;
+  const btn=document.querySelector('[onclick*="confirmRemoveSong('+rowIdx+'"]');
+  if(btn){btn.disabled=true;btn.textContent='Removing...';}
+  try{
+    // Mark entire row as removed with all fields preserved
+    await updateSheetRow(rowIdx,[uri,title,'','','removed']);
+    alert('Removed successfully! Refreshing...');
+    loadAdminPanel();
+  }catch(e){alert('Error removing: '+e.message)}
+}
+
+// ── SHEET FUNCTIONS ──
+
+function jsonpFetch(url){
+  return new Promise((resolve,reject)=>{
+    const cbName='utc_cb_'+Date.now();
+    const script=document.createElement('script');
+    const timeout=setTimeout(()=>{
+      delete window[cbName];
+      document.head.removeChild(script);
+      reject(new Error('Request timed out'));
+    },10000);
+    window[cbName]=function(data){
+      clearTimeout(timeout);
+      delete window[cbName];
+      document.head.removeChild(script);
+      resolve(data);
+    };
+    script.src=url+(url.includes('?')?'&':'?')+'callback='+cbName;
+    script.onerror=()=>{clearTimeout(timeout);delete window[cbName];reject(new Error('Script load failed'));};
+    document.head.appendChild(script);
+  });
+}
+
+async function fetchSheet(){
+  const d=await jsonpFetch(APPS_SCRIPT_URL+'?t='+Date.now());
+  if(d.error)throw new Error(d.error);
+  return d.rows||[];
+}
+
+async function writeToSheet(rowData){
+  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'append',data:JSON.stringify(rowData)}).toString();
+  await fetch(url,{method:'GET',redirect:'follow'});
+  await new Promise(res=>setTimeout(res,2000));
+}
+
+async function updateSheetRow(rowIndex,values){
+  const padded=[...values];
+  while(padded.length<5)padded.push('');
+  const url=APPS_SCRIPT_URL+'?'+new URLSearchParams({action:'update',rowIndex,data:JSON.stringify(padded)}).toString();
+  await fetch(url,{method:'GET',redirect:'follow'});
+  await new Promise(res=>setTimeout(res,2000));
+}
+
+// ── INIT ──
+(async()=>{
+  const p=new URLSearchParams(location.search);
+  const code=p.get('code'),error=p.get('error');
+  if(error){
+    history.replaceState({},'',location.pathname);
+    showLoginError('Spotify login was cancelled. Please try again.');
+    return;
+  }
+  if(code){
+    const ok=await handleCallback(code);
+    if(ok){
+      history.replaceState({},'',location.pathname);
+      await loadPlaylists();
+    } else {
+      history.replaceState({},'',location.pathname);
+    }
+  }
+})();
+</script>
+</body>
+</html>
