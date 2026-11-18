@@ -1010,13 +1010,36 @@ function passToNextTeam(song, attemptedBy){
   retryQueues[nextTeamIdx].push({song, attemptedBy});
 }
 
+// True while Next/Prev is mid-transition (pausing audio, loading the next song).
+// Blocks repeat taps so a double-tap can't skip a song or score it twice.
+let songChanging=false;
+
+function lockSongButtons(){
+  songChanging=true;
+  const nb=document.querySelector('.next-btn');if(nb)nb.disabled=true;
+  const pb=$('prev-btn');if(pb)pb.disabled=true;
+}
+
 async function nextSong(){
   if(!active&&!paused)return;
+  if(songChanging)return;
+  lockSongButtons();
+  try{
+    await advanceSong();
+  }finally{
+    songChanging=false;
+    updateNextBtn();
+  }
+}
+
+async function advanceSong(){
   const scoredSong=currentSong?{...currentSong}:null;
   const scoredChecks={...chks};
 
   await pauseSpotify();
   await new Promise(res=>setTimeout(res,300));
+  // Time ran out during the transition — the grace period owns scoring now
+  if(!active)return;
   if(paused)resumeGame();
 
   if(!scoredSong){loadSong();return;}
@@ -1046,21 +1069,27 @@ async function nextSong(){
 }
 
 async function prevSong(){
-  if(!prevSongData)return;
-  await pauseSpotify();
-  await new Promise(res=>setTimeout(res,300));
+  if(!prevSongData||songChanging)return;
+  lockSongButtons();
+  try{
+    await pauseSpotify();
+    await new Promise(res=>setTimeout(res,300));
+    if(!active)return;
 
-  // Save current song as queued next (with current checkbox state)
-  nextSongData={...currentSong,savedChecks:{...chks}};
+    // Save current song as queued next (with current checkbox state)
+    nextSongData={...currentSong,savedChecks:{...chks}};
 
-  // Restore previous song
-  const prev=prevSongData;
-  prevSongData=null;
+    // Restore previous song
+    const prev=prevSongData;
+    prevSongData=null;
 
-  displaySong(prev,prev.savedChecks);
-
-  // Gray out prev button — can't go back further
-  const pb=$('prev-btn');if(pb)pb.disabled=true;
+    displaySong(prev,prev.savedChecks);
+  }finally{
+    songChanging=false;
+    updateNextBtn();
+    // Gray out prev button — can't go back further
+    const pb=$('prev-btn');if(pb)pb.disabled=true;
+  }
 }
 
 function recordSong(song,pts,t,cv,o){
@@ -1350,7 +1379,7 @@ function renderStats(){
 function updateNextBtn(){
   const btn=document.querySelector('.next-btn');
   if(!btn)return;
-  if(!active){btn.disabled=true;return;}
+  if(!active||songChanging){btn.disabled=true;return;}
   const anyChecked=chks.title||chks.cover||chks.original;
   const fifteenElapsed=songElapsedSecs>=15;
   const nearEnd=timeLeft<=5;
