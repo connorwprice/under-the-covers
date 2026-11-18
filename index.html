@@ -1345,12 +1345,15 @@ function renderStats(){
 // ── NEXT BUTTON STATE ──
 // Enabled when: 15s elapsed on current song OR at least 1 score box checked.
 // Disabled when: ≤5s remain on the game timer, or neither condition above is met.
+// Always disabled when the round isn't live (e.g. the 10s grace period) so no
+// new song can be loaded after time is up.
 function updateNextBtn(){
   const btn=document.querySelector('.next-btn');
   if(!btn)return;
+  if(!active){btn.disabled=true;return;}
   const anyChecked=chks.title||chks.cover||chks.original;
   const fifteenElapsed=songElapsedSecs>=15;
-  const nearEnd=timeLeft<=5&&active; // only suppress during live timer, not grace period
+  const nearEnd=timeLeft<=5;
   btn.disabled=nearEnd||(!anyChecked&&!fifteenElapsed);
 }
 
