@@ -499,7 +499,8 @@ class SpotifyProvider {
 
     const player = new Spotify.Player({
       name: 'Under the Covers',
-      getOAuthToken: cb => cb(this._token),
+      // The SDK calls this on connect and whenever it needs a fresh token
+      getOAuthToken: cb => { getToken().then(t => cb(t)); },
       volume: 0.8
     });
 
@@ -579,16 +580,24 @@ class SpotifyProvider {
 
   async play(uri) {
     if (!this._deviceId) { setStatus('⚠️ Player not ready'); return; }
+    const send = t => fetch(
+      'https://api.spotify.com/v1/me/player/play?device_id=' + this._deviceId,
+      {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uris: [uri] })
+      }
+    );
     try {
-      const r = await fetch(
-        'https://api.spotify.com/v1/me/player/play?device_id=' + this._deviceId,
-        {
-          method: 'PUT',
-          headers: { Authorization: 'Bearer ' + this._token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uris: [uri] })
-        }
-      );
-      if (r.status === 403) setStatus('⚠️ Spotify Premium required');
+      let r = await send(await getToken());
+      // Token rejected — refresh once and retry
+      if (r.status === 401) {
+        const fresh = await refreshAccessToken();
+        if (!fresh) { setStatus('⚠️ Spotify session expired — please reconnect'); return; }
+        r = await send(fresh);
+      }
+      if (r.status === 401) setStatus('⚠️ Spotify session expired — please reconnect');
+      else if (r.status === 403) setStatus('⚠️ Spotify Premium required');
       else setStatus('');
     } catch(e) { setStatus('Playback error: ' + e.message); }
   }
@@ -679,10 +688,55 @@ async function handleCallback(code){
       body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:redirectUri,client_id:CLIENT_ID,code_verifier:v})
     });
     const d=await r.json();
-    if(d.access_token){token=d.access_token;sessionStorage.removeItem('pkce_v');return true}
+    if(d.access_token){saveTokens(d);sessionStorage.removeItem('pkce_v');return true}
     showLoginError('Login failed: '+(d.error_description||d.error||'Unknown error'));
     return false;
   }catch(e){showLoginError('Connection error. Please try again.');return false}
+}
+
+// ── TOKEN REFRESH ──
+// Spotify access tokens expire after 1 hour. The refresh token is kept in
+// sessionStorage so a long game (or a page reload) doesn't require logging in again.
+let tokenExpiresAt=0;
+let refreshInFlight=null;
+
+function saveTokens(d){
+  token=d.access_token;
+  tokenExpiresAt=Date.now()+(d.expires_in||3600)*1000;
+  if(d.refresh_token)sessionStorage.setItem('utc_refresh',d.refresh_token);
+}
+
+// Exchanges the stored refresh token for a new access token.
+// Concurrent callers share one request. Resolves to the new token, or null.
+function refreshAccessToken(){
+  if(refreshInFlight)return refreshInFlight;
+  const rt=sessionStorage.getItem('utc_refresh');
+  if(!rt)return Promise.resolve(null);
+  refreshInFlight=(async()=>{
+    try{
+      const r=await fetch('https://accounts.spotify.com/api/token',{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:new URLSearchParams({grant_type:'refresh_token',refresh_token:rt,client_id:CLIENT_ID})
+      });
+      const d=await r.json();
+      if(d.access_token){saveTokens(d);return token;}
+      // Refresh token revoked or expired — forget it so we fall back to login
+      if(d.error==='invalid_grant')sessionStorage.removeItem('utc_refresh');
+      return null;
+    }catch(e){
+      return null; // network blip — keep the refresh token and try again later
+    }finally{
+      refreshInFlight=null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+// Returns a valid access token, refreshing it if it expires within a minute.
+async function getToken(){
+  if(token&&Date.now()<tokenExpiresAt-60000)return token;
+  return (await refreshAccessToken())||token;
 }
 
 function showLoginError(msg){
@@ -1505,7 +1559,7 @@ async function lookupSpotifyTrack(){
   if(!token){errEl.textContent='Please connect with Spotify first.';errEl.style.display='block';return;}
 
   try{
-    const r=await fetch('https://api.spotify.com/v1/tracks/'+trackId,{headers:{Authorization:'Bearer '+token}});
+    const r=await fetch('https://api.spotify.com/v1/tracks/'+trackId,{headers:{Authorization:'Bearer '+(await getToken())}});
     const d=await r.json();
     if(d.error)throw new Error(d.error.message);
     lookedUpTrack={
@@ -1627,6 +1681,12 @@ async function updateSheetRow(rowIndex,values){
     } else {
       history.replaceState({},'',location.pathname);
     }
+    return;
+  }
+  // Page reloaded in the same tab — reuse the saved session if it's still valid
+  if(sessionStorage.getItem('utc_refresh')){
+    const t=await refreshAccessToken();
+    if(t)await loadPlaylists();
   }
 })();
 </script>
